@@ -19,8 +19,9 @@ type options struct {
 func applyOptions(opts ...Option) *options {
 	options := &options{
 		createDirs:     true, // 默认自动创建目录
-		createDirsMode: 0755, // 默认目录权限：755
-		createMode:     0644, // 默认文件权限：644
+		createDirsMode: 0777, // 默认目录权限
+		createMode:     0666, // 默认文件权限
+		overwrite:      true,
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -52,7 +53,7 @@ func CreateMode(mode os.FileMode) Option { return func(opts *options) { opts.cre
 func Readonly() Option { return func(opts *options) { opts.readonly = true } }
 
 // Overwrite 返回一个 Option，用于设置覆盖已存在的文件
-func Overwrite() Option { return func(opts *options) { opts.overwrite = true } }
+func Overwrite() Option { return func(opts *options) { opts.append, opts.overwrite = false, true } }
 
 // Append 返回一个 Option，用于设置以追加模式写入文件
-func Append() Option { return func(opts *options) { opts.append = true } }
+func Append() Option { return func(opts *options) { opts.append, opts.overwrite = true, false } }

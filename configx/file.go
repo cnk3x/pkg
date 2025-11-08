@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cnk3x/gopkg/errx"
+	"github.com/tidwall/jsonc"
 )
 
 // FindFile 查找文件，支持多个扩展名。
@@ -86,11 +87,17 @@ func unmarshalFile(value any, fn string) (err error) {
 
 	switch ext := path.Ext(fn); ext {
 	case ".json", ".jsonc", "json":
-		err = UnmarshalJSONC(configData, value)
+		configData = jsonc.ToJSONInPlace(configData)
 	case ".yaml", ".yml", "yaml":
-		err = UnmarshalYAML(configData, value)
+		configData, err = YAMLToJSON(configData)
 	default:
 		err = fmt.Errorf("unsupported file ext: %s", ext)
 	}
+
+	if err != nil {
+		return
+	}
+
+	err = UnmarshalJSON(configData, value)
 	return
 }

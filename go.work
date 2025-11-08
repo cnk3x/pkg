@@ -1,8 +1,24 @@
-go 1.18
+go 1.25.3
 
 use (
 	.
 	./cmdx
 	./configx
+	./crond
+	./gormx
+	./gormx/mysql
+	./gormx/pg
+	./gormx/sqlite
+	./jsonx
 	./urlx
+	./urlx/charset
+	./urlx/codec/form
+	./urlx/codec/html
+	./urlx/codec/json
+	./urlx/codec/multipart
+	./urlx/codec/xml
+	./urlx/codec/yaml
+	./urlx/compress
+	./urlx/proxy
+	./urlx/types
 )

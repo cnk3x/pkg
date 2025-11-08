@@ -1,3 +1,3 @@
 module github.com/cnk3x/gopkg/cmdx
 
-go 1.20
+go 1.21
