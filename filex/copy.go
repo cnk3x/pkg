@@ -9,7 +9,7 @@ import (
 var ErrInvalidWrite = errors.New("invalid write result")
 var ErrShortWrite = io.ErrShortWrite
 
-func Copy(ctx context.Context, dst io.Writer, src io.Reader, progress func(int64)) (err error) {
+func CopyPipe(ctx context.Context, dst io.Writer, src io.Reader, progress func(int64)) (err error) {
 	size := 32 * 1024
 	if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
 		if l.N < 1 {

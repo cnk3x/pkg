@@ -15,23 +15,23 @@ var (
 func Dump(w io.Writer, reqBody, respBody bool) ProcessMw {
 	return func(next Process) Process {
 		return func(resp *http.Response) error {
-			w.Write(dumpLine)
+			_, _ = w.Write(dumpLine)
 			reqDump, err := httputil.DumpRequest(resp.Request, reqBody)
 			if err != nil {
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 			} else {
-				w.Write(reqDump)
+				_, _ = w.Write(reqDump)
 			}
-			w.Write(dumpBR)
-			w.Write(dumpLine)
+			_, _ = w.Write(dumpBR)
+			_, _ = w.Write(dumpLine)
 			resDump, _ := httputil.DumpResponse(resp, respBody)
 			if err != nil {
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 			} else {
-				w.Write(resDump)
+				_, _ = w.Write(resDump)
 			}
-			w.Write(dumpBR)
-			w.Write(dumpLine)
+			_, _ = w.Write(dumpBR)
+			_, _ = w.Write(dumpLine)
 			return next(resp)
 		}
 	}

@@ -22,7 +22,7 @@ type Item interface {
 	os.FileInfo
 }
 
-type ProcessFunc func(item Item) (err error)
+type ProcessFunc func(ctx context.Context, item Item) (err error)
 
 func Read(ctx context.Context, source string, itemProcess ProcessFunc) (err error) {
 	switch filepath.Ext(source) {
@@ -50,7 +50,7 @@ func readZip(ctx context.Context, source string, itemProcess ProcessFunc) (err e
 		case <-ctx.Done():
 			err = ctx.Err()
 		default:
-			err = itemProcess(&simpleItem{ctx, i, zr.File[i].Name, zr.File[i].FileInfo(), zr.File[i].Open})
+			err = itemProcess(ctx, &simpleItem{ctx, i, zr.File[i].Name, zr.File[i].FileInfo(), zr.File[i].Open})
 		}
 	}
 	return
@@ -78,7 +78,7 @@ func readTgz(ctx context.Context, source string, itemProcess ProcessFunc) (err e
 			if err = e; err != nil {
 				return
 			}
-			err = itemProcess(&simpleItem{ctx, i, it.Name, it.FileInfo(), func() (io.ReadCloser, error) { return io.NopCloser(tr), nil }})
+			err = itemProcess(ctx, &simpleItem{ctx, i, it.Name, it.FileInfo(), func() (io.ReadCloser, error) { return io.NopCloser(tr), nil }})
 		}
 	}
 

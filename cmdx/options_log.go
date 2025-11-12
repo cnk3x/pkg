@@ -2,7 +2,6 @@ package cmdx
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,50 +10,62 @@ import (
 	"path/filepath"
 )
 
-type LogOptions logOptions
-
-type logOptions struct {
+type logConfig struct {
 	Out string `json:"out,omitempty"`
 	Err string `json:"err,omitempty"`
+
+	processInline func(s string, stdout bool)
 }
 
-func (p LogOptions) MarshalJSON() ([]byte, error) {
+type LogConfig logConfig
+
+func (p LogConfig) MarshalJSON() ([]byte, error) {
 	if p.Out == p.Err {
 		return json.Marshal(p.Out)
 	}
-	return json.Marshal(logOptions(p))
+	return json.Marshal(logConfig(p))
 }
 
-func (p *LogOptions) UnmarshalJSON(data []byte) (err error) {
-	data = bytes.TrimSpace(data)
-	if len(data) < 2 {
+func (p *LogConfig) UnmarshalJSON(data []byte) (err error) {
+	if len(data) == 0 {
 		return
 	}
 
-	if data[0] == '{' && data[len(data)-1] == '}' {
-		m := (logOptions)(*p)
-		if err = json.Unmarshal(data, &m); err == nil {
-			*p = LogOptions(m)
+	if data[0] == '"' {
+		if err = json.Unmarshal(data, &p.Out); err == nil {
+			p.Err = p.Out
 		}
 		return
 	}
 
-	var s string
-	if err = json.Unmarshal(data, &s); err == nil {
-		p.Out, p.Err = s, s
+	m := (*logConfig)(p)
+	if err = json.Unmarshal(data, m); err == nil {
+		*p = LogConfig(*m)
 	}
 	return
 }
 
-func (p *LogOptions) Open() (stdout *os.File, stderr *os.File, closeIt func(), err error) {
+func (p *LogConfig) Open() (stdout *os.File, stderr *os.File, closeIt func(), err error) {
 	nOut, nErr := normalizeLog(p.Out, true), normalizeLog(p.Err, false)
 
-	if stdout, err = createLog(nOut); err != nil {
+	if stdout, err = createLog(nOut, func(line string) {
+		if p.processInline != nil {
+			p.processInline(line, true)
+		} else {
+			slog.Info(line)
+		}
+	}); err != nil {
 		return
 	}
 
 	if nErr != nOut {
-		if stderr, err = createLog(nErr); err != nil {
+		if stderr, err = createLog(nErr, func(line string) {
+			if p.processInline != nil {
+				p.processInline(line, false)
+			} else {
+				slog.Warn(line)
+			}
+		}); err != nil {
 			if stdout != nil {
 				stdout.Close()
 			}
@@ -76,7 +87,7 @@ func (p *LogOptions) Open() (stdout *os.File, stderr *os.File, closeIt func(), e
 	return
 }
 
-func createLog(log string) (*os.File, error) {
+func createLog(log string, processInline func(line string)) (*os.File, error) {
 	switch log {
 	case "nul":
 		return nil, nil
@@ -89,7 +100,13 @@ func createLog(log string) (*os.File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("create inline log error: %w", err)
 		}
-		go lineRead(r, func(line string) { slog.Info(line) })
+		go lineRead(r, func(line string) {
+			if processInline != nil {
+				processInline(line)
+			} else {
+				slog.Info(line)
+			}
+		})
 		return w, nil
 	default:
 		if err := os.MkdirAll(filepath.Dir(log), 0755); err != nil {

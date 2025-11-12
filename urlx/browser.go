@@ -1,7 +1,6 @@
 package urlx
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -38,24 +37,24 @@ func Referer(referer string) HeaderOption {
 }
 
 // Browser 浏览器
-func Browser(ctx context.Context) *Request {
+func Browser() *Request {
 	ms := time.Millisecond
-	return New(ctx).HeaderWith(AcceptHTML, AcceptChinese).TryAt(ms*300, ms*800, ms*1500)
+	return New().HeaderWith(AcceptHTML, AcceptChinese).TryAt(ms*300, ms*800, ms*1500)
 }
 
 // MacEdge Mac Edge 浏览器
-func MacEdge(ctx context.Context) *Request {
-	return Browser(ctx).HeaderWith(MacEdgeAgent)
+func MacEdge() *Request {
+	return Browser().HeaderWith(MacEdgeAgent)
 }
 
 // WindowsEdge Windows Edge 浏览器
-func WindowsEdge(ctx context.Context) *Request {
-	return Browser(ctx).HeaderWith(WindowsEdgeAgent)
+func WindowsEdge() *Request {
+	return Browser().HeaderWith(WindowsEdgeAgent)
 }
 
 // AndroidEdge Android Edge 浏览器
-func AndroidEdge(ctx context.Context) *Request {
-	return Browser(ctx).HeaderWith(AndroidEdgeAgent)
+func AndroidEdge() *Request {
+	return Browser().HeaderWith(AndroidEdgeAgent)
 }
 
 var (

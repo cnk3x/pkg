@@ -1,5 +1,7 @@
 package jsonx
 
+import "log/slog"
+
 type (
 	Strings     = List[string]
 	Ints        = List[int64]
@@ -18,9 +20,11 @@ func (s List[T]) MarshalJSON() ([]byte, error) {
 }
 
 func (s *List[T]) UnmarshalJSON(data []byte) (err error) {
+	slog.Debug("list^T", "data", string(data))
 	var r []T
 	if err = Unmarshal(data, &r); err == nil {
 		*s = r
+		return
 	}
 
 	var v T

@@ -1,69 +1,69 @@
 package cmdx
 
 import (
+	"cmp"
+	"context"
 	"encoding/json"
 	"time"
-
-	"github.com/cnk3x/gopkg/jsonx"
 )
 
-type RestartOptions restartOptions
-
-type restartOptions struct {
-	Enable bool           `json:"-"`
-	Delay  jsonx.Duration `json:"delay,omitempty"`
-	Max    int            `json:"max,omitempty"`
+type restartConfig struct {
+	Type  string        `json:"type,omitempty"` //none, alway, unless-stopped, on-failure
+	Delay time.Duration `json:"delay,omitempty"`
+	Max   int           `json:"max,omitempty"`
 }
 
-func (p RestartOptions) MarshalJSON() ([]byte, error) {
-	if !p.Enable {
-		return json.Marshal(false)
+type RestartConfig restartConfig
+
+func (p RestartConfig) MarshalJSON() ([]byte, error) {
+	if p.Type == "" || p.Type == "none" || ((p.Delay == 0 || p.Delay == time.Second*5) && (p.Max == 0 || p.Max == 10)) {
+		return json.Marshal(p.Type)
 	}
-	if p.Delay == 0 && p.Max == 0 {
-		return json.Marshal(p.Enable)
-	}
-	if p.Delay != 0 && p.Max != 0 {
-		return json.Marshal(restartOptions(p))
-	}
-	if p.Delay == 0 {
-		return json.Marshal(p.Max)
-	}
-	return json.Marshal(p.Delay)
+	return json.Marshal(restartConfig(p))
 }
 
-func (p *RestartOptions) UnmarshalJSON(data []byte) (err error) {
-	var v any
-	if err = json.Unmarshal(data, &v); err != nil {
-		return err
+func (p *RestartConfig) UnmarshalJSON(data []byte) (err error) {
+	if len(data) == 0 {
+		return
 	}
-	switch x := v.(type) {
-	case bool:
-		p.Enable = x
-	case int:
-		p.Enable = true
-		p.Max = x
-	case string:
-		p.Enable = true
-		d, e := time.ParseDuration(x)
-		if err = e; e == nil {
-			p.Delay = jsonx.Duration(d)
-		}
-	case map[any]any:
-		p.Enable = true
-		max, _ := x["max"].(float64)
-		delay, _ := x["delay"].(string)
-		p.Max = int(max)
-		d, e := time.ParseDuration(delay)
-		if err = e; e == nil {
-			p.Delay = jsonx.Duration(d)
-		}
+	if data[0] == '"' {
+		return json.Unmarshal(data, &p.Type)
 	}
+
+	r := (*restartConfig)(p)
+	if err = json.Unmarshal(data, &r); err != nil {
+		return
+	}
+	*p = RestartConfig(*r)
 	return
 }
 
-func (p RestartOptions) ShouldRestart(t int) (time.Duration, bool) {
-	if !p.Enable || (p.Max > 0 && t >= p.Max) {
-		return 0, false
+func (p RestartConfig) CheckWait(ctx context.Context, stop_ctx context.Context, count int, err error) (restart bool) {
+	restart = func() bool {
+		switch p.Type {
+		case "always":
+			return true
+		case "unless-stopped":
+			return stop_ctx.Err() == nil
+		case "on-failure":
+			return stop_ctx.Err() == nil && err != nil
+		default:
+			return false
+		}
+	}()
+
+	if !restart {
+		return
 	}
-	return max(p.Delay.Value(), time.Second), true //最低间隔1秒
+
+	delay := max(cmp.Or(p.Delay, time.Second*5), time.Second/2)
+
+	select {
+	case <-ctx.Done():
+		return false //退出了
+	case <-stop_ctx.Done():
+		return true
+	case <-time.After(delay): //最低1s, 默认5s
+		return true
+	}
 }

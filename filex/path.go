@@ -19,5 +19,5 @@ func PathSplit(p string) (dir, name, ext string) {
 
 func IsRegular(path string) bool {
 	fi, err := os.Stat(path)
-	return err == nil && !fi.Mode().IsRegular()
+	return err == nil && fi.Mode().IsRegular()
 }

@@ -2,34 +2,57 @@ package jsonx
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/tidwall/jsonc"
 )
 
-func From(v any) Raw {
-	d, err := Marshal(v)
+func FromE(v any) (Raw, error) {
+	r, err := Marshal(v)
 	if err != nil {
-		return nil
+		return "", fmt.Errorf("marshal json error: %w", err)
 	}
-	return d
+	return Raw(r), nil
 }
 
-func FromYAML(yaml []byte) Raw {
+func From(v any) Raw { return eDebug(FromE(v)) }
+
+func ParseYamlE(yaml []byte) (Raw, error) {
 	w := &bytes.Buffer{}
 	if err := translateStream(bytes.NewReader(yaml), w); err != nil {
-		slog.Debug("yaml to json error", "err", err)
-		return nil
+		return "", fmt.Errorf("parse yaml to json error: %w", err)
 	}
-	return w.Bytes()
+	return Raw(w.String()), nil
 }
 
-func FromFile(file string) Raw {
+func ParseYaml(yaml []byte) Raw { return eDebug(ParseYamlE(yaml)) }
+
+func LoadE(file string) (Raw, error) {
 	d, err := os.ReadFile(file)
 	if err != nil {
-		slog.Debug("load json file error", "file", file, "err", err)
-		return nil
+		return "", fmt.Errorf("load json file error: %w", err)
 	}
-	return jsonc.ToJSON(d)
+	return Raw(jsonc.ToJSON(d)), nil
+}
+
+func Load(file string) Raw { return eDebug(LoadE(file)) }
+
+func LoadYamlE(file string) (Raw, error) {
+	d, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("load yaml file error: %w", err)
+	}
+	return ParseYamlE(d)
+}
+
+func LoadYaml(file string) Raw { return eDebug(LoadYamlE(file)) }
+
+func eDebug(r Raw, err error) Raw {
+	if err != nil {
+		slog.Debug(err.Error())
+		return ""
+	}
+	return r
 }

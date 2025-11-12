@@ -1,7 +1,6 @@
 package urlx
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -16,7 +15,7 @@ func DefaultUserAgent() HeaderOption {
 }
 
 // Default 默认的请求器
-func Default(ctx context.Context) *Request {
+func Default() *Request {
 	ms := time.Millisecond
-	return New(ctx).HeaderWith(DefaultUserAgent()).TryAt(ms*300, ms*800, ms*1500)
+	return New().HeaderWith(DefaultUserAgent()).TryAt(ms*300, ms*800, ms*1500)
 }

@@ -44,7 +44,7 @@ func TestRequest(t *testing.T) {
 	}))
 	defer closer()
 
-	data, err := Default(context.TODO()).UseClient(&http.Client{}).With(CookieEnabled(false)).
+	data, err := Default().UseClient(&http.Client{}).With(CookieEnabled(false)).
 		Method(MethodPost).
 		Url(addr).
 		Query("q1=1&q2=two").
@@ -52,7 +52,7 @@ func TestRequest(t *testing.T) {
 		HeaderWith(AcceptJSON).
 		// HeaderSet("Referer", "some_referer1").
 		// HeaderDel("Referer").
-		Bytes()
+		Bytes(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestForm(t *testing.T) {
 	}))
 	defer closer()
 
-	data, err := Default(nil).Url(addr + "?q1=1").FormValues(form1).Query("q3=4").Method(MethodPost).With(UseClient(&http.Client{})).Bytes()
+	data, err := Default().Url(addr + "?q1=1").FormValues(form1).Query("q3=4").Method(MethodPost).With(UseClient(&http.Client{})).Bytes(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +112,11 @@ func TestHeader(t *testing.T) {
 	}))
 	defer closer()
 
-	r := Default(nil).Url(addr)
+	r := Default().Url(addr)
 	for n, v := range headers {
 		r.HeaderWith(HeaderSet(n, v...))
 	}
-	data, err := r.Bytes()
+	data, err := r.Bytes(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,10 +131,10 @@ func TestTry(t *testing.T) {
 	defer closer()
 	ms := time.Millisecond
 	errProxy := func(*http.Request) (*url.URL, error) { return url.Parse("https://localhsot:12345") }
-	err := Default(nil).Url(addr).
+	err := Default().Url(addr).
 		UseClient(&http.Client{Transport: &http.Transport{Proxy: errProxy}}).
 		TryAt(50*ms, 50*ms, 500*ms).
-		Process(nil)
+		Process(context.Background())
 	for err != nil {
 		t.Logf("%T: %v", err, err)
 		err = errors.Unwrap(err)
@@ -144,8 +144,8 @@ func TestTry(t *testing.T) {
 func TestDirectError(t *testing.T) {
 	addr, closer := mockHTTPServer(nil)
 	defer closer()
-	errBody := errors.New("ERRBODY")
-	err := Default(nil).Url(addr).Body(func() (contentType string, body io.Reader, err error) { return "", nil, errBody }).Process(nil)
+	errBody := errors.New("ERR_BODY")
+	err := Default().Url(addr).Body(func(context.Context) (body io.Reader, contentType string, err error) { return nil, "", errBody }).Process(context.Background())
 	eq(t, [][2]any{{err, errBody}})
 }
 
@@ -153,8 +153,8 @@ func TestDownload(t *testing.T) {
 	addr, closer := mockHTTPServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) { _, _ = rw.Write([]byte("1234")) }))
 	defer closer()
 	fn := "testdata/some"
-	defer func() { _ = os.Remove(fn) }()
-	if err := Default(nil).Url(addr).Download(&fn); err != nil {
+	defer os.Remove(fn)
+	if err := Default().Url(addr).Download(context.Background(), fn); err != nil {
 		t.Fatal(err)
 	}
 }

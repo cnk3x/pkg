@@ -1,44 +1,61 @@
 package archive
 
 import (
+	"context"
 	"os"
 	"path/filepath"
-	"slices"
+	"regexp"
 	"strings"
 	"sync/atomic"
 
 	"github.com/cnk3x/gopkg/filex"
 )
 
-type Options struct {
-	StripComponents int
-	SkipEmptyDir    bool
-	Report          func(index int, cur, total int64)
+type options struct {
+	stripComponents int
+	skipEmptyDir    bool
+	progress        func(index int, name string, cur, total int64)
+	filters         []string
 }
 
-type Option func(option *Options)
+const pathSeparator = string(filepath.Separator)
 
-func Extract(dir string, options ...Option) ProcessFunc {
-	var extOpts Options
-	for _, o := range options {
-		o(&extOpts)
+func Extract(dir string, extractOptions ...Option) ProcessFunc {
+	var eop options
+	for _, o := range extractOptions {
+		o(&eop)
 	}
 
-	return func(item Item) error {
-		path := item.Path()
+	return func(ctx context.Context, item Item) error {
+		fpath := filepath.Clean(item.Path())
 
-		if extOpts.StripComponents > 0 {
-			const sep = string(filepath.Separator)
-			paths := Compact(strings.Split(strings.Trim(filepath.Clean(path), sep), sep))
-			if len(paths) <= extOpts.StripComponents {
+		if eop.stripComponents > 0 {
+			paths := strings.Split(fpath, pathSeparator)
+			if len(paths) <= eop.stripComponents {
 				return nil
 			}
-			path = filepath.Join(paths[extOpts.StripComponents:]...)
+			fpath = filepath.Join(paths[eop.stripComponents:]...)
 		}
 
-		target := filepath.Join(dir, path)
+		if fpath == "" {
+			return nil
+		}
 
-		if item.IsDir() && !extOpts.SkipEmptyDir {
+		if len(eop.filters) > 0 {
+			for _, f := range eop.filters {
+				re, e := regexp.Compile(f)
+				if e != nil {
+					return e
+				}
+				if !re.MatchString(fpath) {
+					return nil
+				}
+			}
+		}
+
+		target := filepath.Join(dir, fpath)
+
+		if item.IsDir() && !eop.skipEmptyDir {
 			err := os.MkdirAll(target, item.Mode())
 			return err
 		}
@@ -48,23 +65,27 @@ func Extract(dir string, options ...Option) ProcessFunc {
 			return err
 		}
 
-		current, total, index := int64(0), item.Size(), item.Index()
-		progress := Iif(extOpts.Report != nil, func(n int64) { extOpts.Report(index, atomic.AddInt64(&current, n), total) }, nil)
-
-		return filex.Process(target, filex.WriteFrom(it, progress), filex.CreateMode(item.Mode().Perm()))
+		var p filex.ProgressFunc
+		if eop.progress != nil {
+			current, total, index := int64(0), item.Size(), item.Index()
+			p = func(n int64) { eop.progress(index, fpath, atomic.AddInt64(&current, n), total) }
+		}
+		return filex.Process(target, filex.WriteFrom(ctx, it, p), filex.CreateMode(item.Mode().Perm()))
 	}
 }
 
-func Compact[T comparable](s []T) []T {
-	var zero T
-	return slices.DeleteFunc(s, func(it T) bool { return it == zero })
+type Option func(option *options)
+
+func Filter(filters ...string) Option { return func(option *options) { option.filters = filters } }
+
+func StripComponents(deep int) Option {
+	return func(option *options) { option.stripComponents = deep }
 }
 
-func May[T any](v T, _ error) T { return v }
+func SkipEmptyDir(skip bool) Option {
+	return func(option *options) { option.skipEmptyDir = skip }
+}
 
-func Iif[T any](c bool, t, f T) T {
-	if c {
-		return t
-	}
-	return f
+func Progress(progress func(index int, name string, cur, total int64)) Option {
+	return func(option *options) { option.progress = progress }
 }

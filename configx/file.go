@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/cnk3x/gopkg/errx"
-	"github.com/tidwall/jsonc"
+	"github.com/cnk3x/gopkg/jsonx"
 )
 
 // FindFile 查找文件，支持多个扩展名。
@@ -80,16 +80,12 @@ func UnmarshalFile(value any, fn string, exts ...string) (err error) {
 
 // UnmarshalFile 从文件中加载配置数据，并将其反序列化为指定的 Go 值。
 func unmarshalFile(value any, fn string) (err error) {
-	configData, e := os.ReadFile(fn)
-	if err = e; err != nil {
-		return
-	}
-
+	var raw jsonx.Raw
 	switch ext := path.Ext(fn); ext {
 	case ".json", ".jsonc", "json":
-		configData = jsonc.ToJSONInPlace(configData)
+		raw, err = jsonx.LoadE(fn)
 	case ".yaml", ".yml", "yaml":
-		configData, err = YAMLToJSON(configData)
+		raw, err = jsonx.LoadYamlE(fn)
 	default:
 		err = fmt.Errorf("unsupported file ext: %s", ext)
 	}
@@ -98,6 +94,8 @@ func unmarshalFile(value any, fn string) (err error) {
 		return
 	}
 
-	err = UnmarshalJSON(configData, value)
+	if raw != "" {
+		err = raw.Unmarshal(value)
+	}
 	return
 }

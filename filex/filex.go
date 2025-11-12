@@ -1,12 +1,16 @@
 package filex
 
 import (
+	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"unsafe"
+
+	"github.com/cnk3x/gopkg/errx"
 )
 
 // ProcessFunc 定义了对已打开文件进行自定义处理的函数签名
@@ -15,10 +19,38 @@ type ProcessFunc func(file *os.File) error
 // ProgressFunc 定义了在拷贝过程中报告已拷贝字节数的函数签名
 type ProgressFunc func(n int64)
 
-// Cat 一次性读取文件全部内容并以字符串形式返回（内部使用 unsafe 转换，零拷贝）
-func Cat(filePath string) string {
-	bs, _ := os.ReadFile(filePath)
-	return unsafe.String(unsafe.SliceData(bs), len(bs))
+func ProgressJoin(progress ...ProgressFunc) ProgressFunc {
+	var n bool
+	for _, p := range progress {
+		if p != nil {
+			n = true
+			break
+		}
+	}
+	if !n {
+		return nil
+	}
+	return func(n int64) {
+		for _, p := range progress {
+			if p != nil {
+				p(n)
+			}
+		}
+	}
+}
+
+// Cat 一次性读取文件全部内容并以字符串形式返回
+func Cat(filePath string, trimSpace ...bool) string { return errx.Select(CatE(filePath, trimSpace...)) }
+
+func CatE(filePath string, trimSpace ...bool) (string, error) {
+	bs, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read file %s error: %w", filePath, err)
+	}
+	if len(trimSpace) > 0 && trimSpace[0] {
+		bs = bytes.TrimSpace(bs)
+	}
+	return string(bs), nil
 }
 
 // WriteText 将文本写入指定文件，支持通过 opts 控制是否自动创建目录及文件权限
@@ -31,6 +63,14 @@ func WriteText(filePath string, text string, opts ...Option) (err error) {
 	}
 	err = os.WriteFile(filePath, []byte(text), options.createMode)
 	return
+}
+
+func Copy(src, dst string) (err error) {
+	return Process(src, func(r *os.File) error {
+		return Process(dst, func(w *os.File) error {
+			return CopyPipe(context.Background(), w, r, nil)
+		})
+	}, Readonly())
 }
 
 // Open 根据 opts 选项打开或创建文件，支持只读、覆盖、追加、排他创建等模式
@@ -72,16 +112,16 @@ func Process(filePath string, processFunc ProcessFunc, opts ...Option) (err erro
 }
 
 // WriteFrom 返回一个 ProcessFunc，用于将外部 Reader 数据写入文件
-func WriteFrom(r io.Reader, progress ...ProgressFunc) ProcessFunc {
+func WriteFrom(ctx context.Context, r io.Reader, progress ...ProgressFunc) ProcessFunc {
 	return func(file *os.File) error {
-		return ProgressCopy(file, r, progress...)
+		return CopyPipe(ctx, file, r, ProgressJoin(progress...))
 	}
 }
 
 // ReadTo 返回一个 ProcessFunc，用于将文件内容读出到外部 Writer
-func ReadTo(w io.Writer, progress ...ProgressFunc) ProcessFunc {
+func ReadTo(ctx context.Context, w io.Writer, progress ...ProgressFunc) ProcessFunc {
 	return func(file *os.File) error {
-		return ProgressCopy(w, file, progress...)
+		return CopyPipe(ctx, w, file, ProgressJoin(progress...))
 	}
 }
 

@@ -23,14 +23,13 @@ const (
 
 // 一些特定方法的定义
 type (
-	Option       = func(*Request) error                                   // 请求选项
-	Body         = func() (contentType string, body io.Reader, err error) // 请求提交内容构造方法
-	HeaderOption = func(headers http.Header)                              // 请求头处理
+	Option       = func(*Request) error                                                      // 请求选项
+	Body         = func(ctx context.Context) (body io.Reader, contentType string, err error) // 请求提交内容构造方法
+	HeaderOption = func(headers http.Header)                                                 // 请求头处理
 )
 
 // Request 请求构造
 type Request struct {
-	ctx     context.Context        // Context
 	options []func(*Request) error // options
 
 	// request fields
@@ -41,7 +40,7 @@ type Request struct {
 	headers   []HeaderOption // 请求头处理
 
 	// response fields
-	beforeMw []ProcessMw // 中间件
+	uses []ProcessMw // 中间件
 
 	// client fields
 	tryTimes []time.Duration // 重试时间和时机
@@ -49,8 +48,8 @@ type Request struct {
 }
 
 // New 以一些选项开始初始化请求器
-func New(ctx context.Context, options ...Option) *Request {
-	return (&Request{ctx: ctx}).With(options...)
+func New(options ...Option) *Request {
+	return (&Request{}).With(options...)
 }
 
 /*请求公共设置*/
@@ -86,7 +85,7 @@ func (c *Request) Body(body Body) *Request {
 }
 
 func (c *Request) Form(formBody io.Reader) *Request {
-	return c.Body(func() (contentType string, body io.Reader, err error) {
+	return c.Body(func(ctx context.Context) (body io.Reader, contentType string, err error) {
 		contentType = "application/x-www-form-urlencoded; charset=utf-8"
 		body = formBody
 		return

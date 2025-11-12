@@ -4,51 +4,30 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 )
 
-var (
-	workPath string
-	envKey   string
+const (
+	BinaryPath       = "binary"
+	CachePath        = "cache"
+	TempPath         = "temp"
+	LogPath          = "log"
+	UIPath           = "ui"
+	ConfigPath       = "config"
+	PidPath          = "pid"
+	RuntimePath      = "runtime"
+	SubscriptionPath = "subscriptions"
 )
+
+var workPath string
 
 func init() {
-	pathInit()
+	workPath, _ = os.Getwd()
 }
 
-func pathInit() {
-	workPath = getEnv("WORK_PATH", ".")
-	workPath, _ = filepath.Abs(workPath)
-}
+func SetWorkPath(path string) { workPath, _ = filepath.Abs(path) }
 
-func SetEnvKey(key string) {
-	envKey = key
-	pathInit()
-}
+func WorkPath() string { return workPath }
 
-func getEnv(key string, defaultValue string) (value string) {
-	if envKey != "" {
-		key = envKey + "_" + key
-	}
-	if v, ok := os.LookupEnv(strings.ToUpper(key)); ok {
-		value = v
-	} else {
-		value = defaultValue
-	}
-	return
-}
-
-func SetWorkPath(path string) { workPath = path }
-func WorkPath() string        { return workPath }
-
-func GetPath(paths ...string) string {
-	paths = append(paths, workPath)
-	for i, j := 0, 0; i < len(paths)-1; i++ {
-		if p := strings.TrimSpace(paths[i]); p != "" {
-			paths[j] = p
-			j++
-		}
-	}
-	paths = slices.DeleteFunc(slices.Insert(paths, 0, workPath), func(s string) bool { return s == "" })
-	return filepath.Join(paths...)
+func GetWorkPath(pType string, paths ...string) string {
+	return filepath.Join(slices.Insert(paths, 0, workPath, pType)...)
 }

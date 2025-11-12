@@ -1,98 +1,147 @@
 package strx
 
 import (
-	"cmp"
 	"io"
-	"maps"
+	"os"
 	"strings"
 
 	"github.com/valyala/fasttemplate"
 )
 
-func ReplaceTemplate(src string, args ...string) string {
-	return fasttemplate.ExecuteFuncString(src, "{", "}", func(w io.Writer, tag string) (int, error) {
+type TagFind func(tag string) (value any, ok bool)
+
+const sTag = "{{"
+const eTag = "}}"
+
+func EnvFind(tag string) (value any, ok bool) {
+	if ok = len(tag) > 0 && tag[0] == '$'; ok && len(tag) > 1 {
+		value = Atob(os.Getenv(tag[1:]))
+	}
+	return
+}
+
+func Replace(src string, tagFinds ...TagFind) string {
+	return fasttemplate.ExecuteFuncString(src, sTag, eTag, func(w io.Writer, tag string) (int, error) {
 		nTag := strings.TrimSpace(tag)
-		for i := 0; i < len(args)-1; i += 2 {
-			if args[i] == nTag {
-				return io.WriteString(w, args[i+1])
-			}
+
+		if len(nTag) > 1 && nTag[0] == '$' {
+			return w.Write(Atob(os.Getenv(nTag[1:])))
 		}
-		return io.WriteString(w, "{"+tag+"}")
-	})
-}
 
-type Template struct {
-	sTag string
-	eTag string
-	vars map[string]string
-}
-
-func NewTemplate(args ...string) *Template {
-	return (&Template{}).Vars(args...)
-}
-
-func (t *Template) New(args ...string) *Template {
-	return NewTemplate().Tag(t.sTag, t.eTag).VarMap(t.vars).Vars(args...)
-}
-
-func (t *Template) Tag(startTag, endTag string) *Template {
-	t.sTag, t.eTag = startTag, endTag
-	return t
-}
-
-func (t *Template) StartTag(startTag string) *Template {
-	t.sTag = startTag
-	return t
-}
-
-func (t *Template) EndTag(endTag string) *Template {
-	t.eTag = endTag
-	return t
-}
-
-func (t *Template) VarMap(vars map[string]string) *Template {
-	if t.vars == nil {
-		t.vars = make(map[string]string, len(vars))
-	}
-	maps.Copy(t.vars, vars)
-	return t
-}
-
-func (t *Template) VarClear() *Template {
-	clear(t.vars)
-	return t
-}
-
-func (t *Template) Vars(vars ...string) *Template {
-	if t.vars == nil {
-		t.vars = make(map[string]string, len(vars)/2)
-	}
-	for i := 0; i < len(vars)-1; i += 2 {
-		t.vars[vars[i]] = vars[i+1]
-	}
-	return t
-}
-
-func (t *Template) Replace(src string, args ...string) string {
-	startTag, endTag := cmp.Or(t.sTag, "{"), cmp.Or(t.eTag, "}")
-
-	return fasttemplate.ExecuteFuncString(src, startTag, endTag, func(w io.Writer, tag string) (int, error) {
-		nTag := strings.TrimSpace(tag)
-
-		if len(args) > 1 {
-			for i := 0; i < len(args)-1; i += 2 {
-				if args[i] == nTag {
-					return io.WriteString(w, args[i+1])
+		for _, tagFind := range tagFinds {
+			if tagFind == nil {
+				continue
+			}
+			if v, ok := tagFind(nTag); ok {
+				if written, n, err := writeValue(w, nTag, v); written {
+					return n, err
 				}
 			}
 		}
 
-		if len(t.vars) > 0 {
-			if v, ok := t.vars[nTag]; ok {
-				return io.WriteString(w, v)
+		return writeBack(w, sTag, eTag, tag)
+	})
+}
+
+func Replaces(src []string, tagFinds ...TagFind) (dst []string) {
+	dst = make([]string, len(src))
+	for i, s := range src {
+		dst[i] = Replace(s, tagFinds...)
+	}
+	return dst
+}
+
+func ReplaceInline(src []string, tagFinds ...TagFind) {
+	for i, s := range src {
+		src[i] = Replace(s, tagFinds...)
+	}
+}
+
+func ReplaceWith(src string, args ...any) string {
+	return Replace(src, TagArg(args...))
+}
+
+func writeValue(w io.Writer, tag string, v any) (written bool, n int, err error) {
+	written = true
+	if v != nil {
+		switch value := v.(type) {
+		case []byte:
+			n, err = w.Write(value)
+		case string:
+			n, err = w.Write([]byte(value))
+		case fasttemplate.TagFunc:
+			n, err = value(w, tag)
+		case func() string:
+			n, err = w.Write([]byte(value()))
+		default:
+			written = false
+		}
+	}
+	return
+}
+
+func writeBack(w io.Writer, sTag, eTag, tag string) (int, error) {
+	if _, err := w.Write(Atob(sTag)); err != nil {
+		return 0, err
+	}
+
+	if _, err := w.Write(Atob(tag)); err != nil {
+		return 0, err
+	}
+
+	if _, err := w.Write(Atob(eTag)); err != nil {
+		return 0, err
+	}
+
+	return len(sTag) + len(tag) + len(eTag), nil
+}
+
+func TagArgs(args []string) TagFind {
+	if len(args) < 2 {
+		return nil
+	}
+	return func(tag string) (any, bool) {
+		for i := 0; i < len(args)-1; i += 2 {
+			if args[i] == tag {
+				return args[i+1], true
 			}
 		}
+		return nil, false
+	}
+}
 
-		return io.WriteString(w, startTag+tag+endTag)
-	})
+func TagArg(args ...any) TagFind {
+	if len(args) < 2 {
+		return nil
+	}
+	return func(tag string) (any, bool) {
+		for i := 0; i < len(args)-1; i += 2 {
+			if args[i] == tag {
+				return args[i+1], true
+			}
+		}
+		return nil, false
+	}
+}
+
+func TagMap(tagMap map[string]any) TagFind {
+	if len(tagMap) == 0 {
+		return nil
+	}
+	return func(tag string) (any, bool) {
+		v, ok := tagMap[tag]
+		return v, ok
+	}
+}
+
+func TagUpper(finds ...TagFind) TagFind {
+	return func(tag string) (value any, ok bool) {
+		tag = strings.ToUpper(tag)
+		for _, find := range finds {
+			if value, ok = find(tag); ok {
+				break
+			}
+		}
+		return
+	}
 }
