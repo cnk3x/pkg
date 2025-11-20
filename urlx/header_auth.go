@@ -6,24 +6,23 @@ import (
 
 /* headers */
 
-func Authorization(authorization string) HeaderOption {
+func Authorization(authorization string) Option {
 	if authorization != "" {
 		return HeaderSet("Authorization", authorization)
-	} else {
-		return HeaderDel("Authorization")
 	}
+	return HeaderSet("-Authorization", "")
 }
 
-func Bearer(bearerToken string) HeaderOption {
+func Bearer(bearerToken string) Option {
 	if bearerToken != "" {
 		Authorization("Bearer " + bearerToken)
 	}
-	return HeaderDel("Authorization")
+	return HeaderSet("-Authorization", "")
 }
 
-func BasicAuth(user, pass string) HeaderOption {
-	if user != "" || pass != "" {
+func BasicAuth(user, pass string) Option {
+	if pass != "" {
 		return Authorization(base64.StdEncoding.EncodeToString([]byte(user + ":" + pass)))
 	}
-	return HeaderDel("Authorization")
+	return HeaderSet("-Authorization", "")
 }

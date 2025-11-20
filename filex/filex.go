@@ -40,7 +40,7 @@ func ProgressJoin(progress ...ProgressFunc) ProgressFunc {
 }
 
 // Cat 一次性读取文件全部内容并以字符串形式返回
-func Cat(filePath string, trimSpace ...bool) string { return errx.Select(CatE(filePath, trimSpace...)) }
+func Cat(filePath string, trimSpace ...bool) string { return errx.May(CatE(filePath, trimSpace...)) }
 
 func CatE(filePath string, trimSpace ...bool) (string, error) {
 	bs, err := os.ReadFile(filePath)

@@ -1,9 +1,10 @@
-package urlx
+package browser
 
 import (
-	"net/http"
 	"strings"
 	"time"
+
+	"github.com/cnk3x/gopkg/urlx"
 )
 
 const (
@@ -16,45 +17,55 @@ const (
 	HeaderPragma         = "Pragma"        // no-cache
 )
 
+var (
+	HeaderSet = urlx.HeaderSet
+	Options   = urlx.Options
+)
+
+type (
+	Option  = urlx.Option
+	Request = urlx.Request
+)
+
 // AcceptLanguage 接受语言
-func AcceptLanguage(acceptLanguages ...string) HeaderOption {
+func AcceptLanguage(acceptLanguages ...string) Option {
 	return HeaderSet(HeaderAcceptLanguage, strings.Join(acceptLanguages, "; "))
 }
 
 // Accept 接受格式
-func Accept(accepts ...string) HeaderOption {
+func Accept(accepts ...string) Option {
 	return HeaderSet(HeaderAccept, strings.Join(accepts, ", "))
 }
 
 // UserAgent 浏览器代理字符串
-func UserAgent(userAgent string) HeaderOption {
+func UserAgent(userAgent string) Option {
 	return HeaderSet(HeaderUserAgent, userAgent)
 }
 
 // Referer 引用地址
-func Referer(referer string) HeaderOption {
+func Referer(referer string) Option {
 	return HeaderSet(HeaderReferer, referer)
 }
 
 // Browser 浏览器
 func Browser() *Request {
 	ms := time.Millisecond
-	return New().HeaderWith(AcceptHTML, AcceptChinese).TryAt(ms*300, ms*800, ms*1500)
+	return urlx.New().With(AcceptHTML, AcceptChinese).Try(ms*300, ms*800, ms*1500)
 }
 
 // MacEdge Mac Edge 浏览器
 func MacEdge() *Request {
-	return Browser().HeaderWith(MacEdgeAgent)
+	return Browser().With(MacEdgeAgent)
 }
 
 // WindowsEdge Windows Edge 浏览器
 func WindowsEdge() *Request {
-	return Browser().HeaderWith(WindowsEdgeAgent)
+	return Browser().With(WindowsEdgeAgent)
 }
 
 // AndroidEdge Android Edge 浏览器
 func AndroidEdge() *Request {
-	return Browser().HeaderWith(AndroidEdgeAgent)
+	return Browser().With(AndroidEdgeAgent)
 }
 
 var (
@@ -93,62 +104,5 @@ var (
 	AcceptAny = Accept("*/*")
 
 	// NoCache 无缓存
-	NoCache = HeaderOption(func(headers http.Header) {
-		headers.Set(HeaderCacheControl, "no-cache")
-		headers.Set(HeaderPragma, "no-cache")
-	})
+	NoCache = Options(HeaderSet(HeaderCacheControl, "no-cache"), HeaderSet(HeaderPragma, "no-cache"))
 )
-
-// type BrowserBuilder struct {
-// 	Mozilla     string
-// 	Platform    []string
-// 	Devices     string
-// 	AppleWebKit string
-// 	Apps        []BrowserApp
-// }
-//
-// type BrowserApp struct {
-// 	Name    string
-// 	Version string
-// }
-//
-// func (b BrowserBuilder) String() string {
-// 	var ua bytes.Buffer
-// 	if b.Mozilla == "" {
-// 		b.Mozilla = "5.0"
-// 	}
-// 	ua.WriteString("Mozilla/")
-// 	ua.WriteString(b.Mozilla)
-//
-// 	if len(b.Platform) > 0 || b.Devices != "" {
-// 		ua.WriteByte('(')
-// 		for i, p := range b.Platform {
-// 			if i > 0 {
-// 				ua.WriteString("; ")
-// 			}
-// 			ua.WriteString(p)
-// 		}
-// 		if b.Devices != "" {
-// 			if len(b.Platform) > 0 {
-// 				ua.WriteString("; ")
-// 			}
-// 			ua.WriteString(b.Devices)
-// 		}
-// 		ua.WriteByte(')')
-// 	}
-//
-// 	if b.AppleWebKit != "" {
-// 		ua.WriteString("AppleWebKit/")
-// 		ua.WriteString(b.AppleWebKit)
-// 		ua.WriteString("(KHTML, like Gecko)")
-// 	}
-//
-// 	for _, app := range b.Apps {
-// 		ua.WriteByte(' ')
-// 		ua.WriteString(app.Name)
-// 		ua.WriteByte('/')
-// 		ua.WriteString(app.Version)
-// 	}
-//
-// 	return ua.String()
-// }

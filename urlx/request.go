@@ -1,11 +1,8 @@
 package urlx
 
 import (
-	"context"
-	"io"
+	"log/slog"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 )
 
@@ -21,36 +18,34 @@ const (
 	MethodTrace   = http.MethodTrace
 )
 
-// 一些特定方法的定义
-type (
-	Option       = func(*Request) error                                                      // 请求选项
-	Body         = func(ctx context.Context) (body io.Reader, contentType string, err error) // 请求提交内容构造方法
-	HeaderOption = func(headers http.Header)                                                 // 请求头处理
-)
-
 // Request 请求构造
 type Request struct {
 	options []func(*Request) error // options
 
 	// request fields
-	method    string         // 接口请求方法
-	url       string         // 请求地址
-	query     string         // 请求链接参数
-	buildBody Body           // 请求内容
-	headers   []HeaderOption // 请求头处理
+	method  string         // 接口请求方法
+	url     string         // 请求地址
+	body    Body           // 请求内容
+	headers []HeaderOption // 请求头处理
 
 	// response fields
-	uses []ProcessMw // 中间件
+	uses []Process // 中间件
 
 	// client fields
 	tryTimes []time.Duration // 重试时间和时机
 	client   *http.Client    // client
+
+	//misc
+	log      *slog.Logger
+	logLevel slog.Level
+
+	// 特别设置的头参数，优先级比通过 HeaderSet 方法设置的头参数高
+	userAgent string
+	referer   string
 }
 
 // New 以一些选项开始初始化请求器
-func New(options ...Option) *Request {
-	return (&Request{}).With(options...)
-}
+func New(options ...Option) *Request { return (&Request{}).With(options...) }
 
 /*请求公共设置*/
 
@@ -61,61 +56,23 @@ func (c *Request) With(options ...Option) *Request {
 }
 
 // Method 设置请求方法
-func (c *Request) Method(method string) *Request {
-	c.method = method
-	return c
-}
+func (c *Request) Method(method string) *Request { c.method = method; return c }
 
 // Url 设置请求链接
-func (c *Request) Url(url string) *Request {
-	c.url = url
-	return c
+func (c *Request) Url(url string) *Request { c.url = url; return c }
+
+// UserAgent 设置用户代理
+func (c *Request) UserAgent(userAgent string) *Request { c.userAgent = userAgent; return c }
+
+// Referer 设置请求来源
+func (c *Request) Referer(referer string) *Request { c.referer = referer; return c }
+
+// UserAgent 设置用户代理
+func UserAgent(userAgent string) Option {
+	return func(c *Request) error { c.UserAgent(userAgent); return nil }
 }
 
-// Query 设置请求Query参数
-func (c *Request) Query(query string) *Request {
-	c.query = query
-	return c
-}
-
-// Body 设置请求提交内容
-func (c *Request) Body(body Body) *Request {
-	c.buildBody = body
-	return c
-}
-
-func (c *Request) Form(formBody io.Reader) *Request {
-	return c.Body(func(ctx context.Context) (body io.Reader, contentType string, err error) {
-		contentType = "application/x-www-form-urlencoded; charset=utf-8"
-		body = formBody
-		return
-	})
-}
-
-func (c *Request) FormValues(formBody url.Values) *Request {
-	return c.Form(strings.NewReader(formBody.Encode()))
-}
-
-/* headers */
-
-// HeaderWith 设置请求头
-func (c *Request) HeaderWith(options ...HeaderOption) *Request {
-	c.headers = append(c.headers, options...)
-	return c
-}
-
-// HeaderSet 设置请求头
-func HeaderSet(key string, values ...string) HeaderOption {
-	return func(headers http.Header) {
-		headers.Set(key, strings.Join(values, ","))
-	}
-}
-
-// HeaderDel 删除请求头
-func HeaderDel(keys ...string) HeaderOption {
-	return func(headers http.Header) {
-		for _, key := range keys {
-			headers.Del(key)
-		}
-	}
+// Referer 设置请求来源
+func Referer(referer string) Option {
+	return func(c *Request) error { c.UserAgent(referer); return nil }
 }

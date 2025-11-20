@@ -24,16 +24,14 @@ func Encode(in any) Body {
 	return func() (contentType string, body io.Reader, err error) {
 		contentType = "application/json; charset=utf-8"
 		switch o := in.(type) {
+		case *bytes.Buffer:
+			body = o
 		case io.Reader:
 			body = o
 		case []byte:
 			body = bytes.NewReader(o)
 		case string:
 			body = strings.NewReader(o)
-		case bytes.Buffer:
-			body = bytes.NewReader(o.Bytes())
-		case *bytes.Buffer:
-			body = bytes.NewReader(o.Bytes())
 		default:
 			var data []byte
 			if data, err = Marshal(in); err == nil {

@@ -2,31 +2,23 @@ package urlx
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
 
 const (
-	HeaderRequestCookie  = "Cookie"     // Request Cookie
-	HeaderResponseCookie = "Set-Cookie" // Response Cookie
+	HeaderRequestCookie = "Cookie" // Request Cookie
+	// HeaderResponseCookie = "Set-Cookie" // Response Cookie
 )
 
-// ReadCookie 从响应读取Cookie
-func ReadCookie(read func(cookies []*http.Cookie) error) ProcessMw {
-	return func(next Process) Process {
-		return func(resp *http.Response) error {
-			if err := read(resp.Cookies()); err != nil {
-				return err
-			}
-			return next(resp)
-		}
-	}
+func CookieSet(cookieText string) Option {
+	return func(c *Request) error { c.HeaderSet(HeaderRequestCookie, cookieText); return nil }
 }
 
 // CookieAddString 添加Cookie到请求
-func CookieAddString(cookies ...string) HeaderOption {
-	return func(headers http.Header) {
+func CookieAddString(cookies ...string) Option {
+	return Headers(func(headers http.Header) {
 		for _, s := range cookies {
 			if s != "" {
 				if c := headers.Get(HeaderRequestCookie); c != "" {
@@ -36,12 +28,12 @@ func CookieAddString(cookies ...string) HeaderOption {
 				}
 			}
 		}
-	}
+	})
 }
 
 // CookieAdd 添加Cookie到请求
-func CookieAdd(cookies ...*http.Cookie) HeaderOption {
-	return func(headers http.Header) {
+func CookieAdd(cookies ...*http.Cookie) Option {
+	return Headers(func(headers http.Header) {
 		for _, cookie := range cookies {
 			if cookie != nil {
 				s := fmt.Sprintf("%s=%s", sanitizeCookieName(cookie.Name), sanitizeCookieValue(cookie.Value))
@@ -52,7 +44,7 @@ func CookieAdd(cookies ...*http.Cookie) HeaderOption {
 				}
 			}
 		}
-	}
+	})
 }
 
 var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
@@ -82,7 +74,7 @@ func sanitizeOrWarn(fieldName string, valid func(byte) bool, v string) string {
 		if valid(v[i]) {
 			continue
 		}
-		log.Printf("net/http: invalid byte %q in %s; dropping invalid bytes", v[i], fieldName)
+		slog.Debug(fmt.Sprintf("net/http: invalid byte %q in %s; dropping invalid bytes", v[i], fieldName), "pkg", "urlx")
 		ok = false
 		break
 	}

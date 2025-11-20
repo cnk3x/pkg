@@ -15,6 +15,7 @@ import (
 
 // Raw 原始json数据, 封装了一些常用便捷的操作
 type Raw string
+type Result = gjson.Result
 
 func Get[T ~string | ~[]byte](src T, key ...string) Raw {
 	if len(key) == 0 || key[0] == "" {
@@ -30,25 +31,37 @@ func New(key string, value any) Raw {
 func (r *Raw) UnmarshalJSON(bytes []byte) error { *r = Raw(bytes); return nil }
 func (r Raw) MarshalJSON() ([]byte, error)      { return []byte(r), nil }
 
-func (r Raw) get(key string) gjson.Result {
+func (r Raw) GetRet(key string) Result {
 	if key == "" {
-		return gjson.Parse(string(r))
+		// return gjson.Parse(string(r))
+		key = "@this"
 	}
 	return gjson.Get(string(r), key)
 }
 
+func (r Raw) String() string { return string(r) }
+func (r Raw) IsEmpty() bool  { return len(r) == 0 }
+
+func (r Raw) Get(key string) Raw { return Raw(r.GetRet(key).Raw) }
+
 func (r Raw) Pretty() Raw { return r.Get("@pretty") }
+func (r Raw) Ugly() Raw   { return r.Get("@ugly") }
 
-func (r Raw) String() string              { return string(r) }
-func (r Raw) IsEmpty() bool               { return len(r) == 0 }
-func (r Raw) Exists(key string) bool      { return r.get(key).Exists() }
-func (r Raw) Get(key string) Raw          { return Raw(r.get(key).Raw) }
-func (r Raw) GetString(key string) string { return r.get(key).String() }
-func (r Raw) GetInt(key string) int64     { return r.get(key).Int() }
-func (r Raw) GetFloat(key string) float64 { return r.get(key).Float() }
-func (r Raw) GetBool(key string) bool     { return r.get(key).Bool() }
+func (r Raw) Exists(key string) bool      { return r.GetRet(key).Exists() }
+func (r Raw) GetString(key string) string { return r.GetRet(key).String() }
+func (r Raw) GetInt(key string) int64     { return r.GetRet(key).Int() }
+func (r Raw) GetFloat(key string) float64 { return r.GetRet(key).Float() }
 
-func (r Raw) GetTime1(key string) time.Time { return r.get(key).Time() }
+// GetBool  获取bool值, 如果不存在, 则返回def
+func (r Raw) GetBool(key string, def ...bool) bool {
+	if gr := r.GetRet(key); gr.Exists() {
+		return gr.Bool()
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return false
+}
 
 func (r Raw) GetDuration(key string) time.Duration {
 	s := r.GetString(key)
@@ -150,20 +163,20 @@ func (r Raw) GetTime(key string) (dst time.Time) {
 	}
 }
 
-func (r Raw) Index(key string) int     { return r.get(key).Index }
-func (r Raw) Indexes(key string) []int { return r.get(key).Indexes }
+func (r Raw) Index(key string) int     { return r.GetRet(key).Index }
+func (r Raw) Indexes(key string) []int { return r.GetRet(key).Indexes }
 
-func toRaw(item gjson.Result, _ int) Raw       { return Raw(item.Raw) }
-func toString(item gjson.Result, _ int) string { return item.String() }
-func toInt(item gjson.Result, _ int) int64     { return item.Int() }
-func toFloat(item gjson.Result, _ int) float64 { return item.Float() }
-func toBool(item gjson.Result, _ int) bool     { return item.Bool() }
+func (r Raw) Gets(key string) []Raw          { return loMap(r.GetRet(key).Array(), toRaw) }
+func (r Raw) GetStrings(key string) []string { return loMap(r.GetRet(key).Array(), toString) }
+func (r Raw) GetInts(key string) []int64     { return loMap(r.GetRet(key).Array(), toInt) }
+func (r Raw) GetFloats(key string) []float64 { return loMap(r.GetRet(key).Array(), toFloat) }
+func (r Raw) GetBools(key string) []bool     { return loMap(r.GetRet(key).Array(), toBool) }
 
-func (r Raw) Gets(key string) []Raw          { return loMap(r.get(key).Array(), toRaw) }
-func (r Raw) GetStrings(key string) []string { return loMap(r.get(key).Array(), toString) }
-func (r Raw) GetInts(key string) []int64     { return loMap(r.get(key).Array(), toInt) }
-func (r Raw) GetFloats(key string) []float64 { return loMap(r.get(key).Array(), toFloat) }
-func (r Raw) GetBools(key string) []bool     { return loMap(r.get(key).Array(), toBool) }
+func toRaw(item gjson.Result) Raw       { return Raw(item.Raw) }
+func toString(item gjson.Result) string { return item.String() }
+func toInt(item gjson.Result) int64     { return item.Int() }
+func toFloat(item gjson.Result) float64 { return item.Float() }
+func toBool(item gjson.Result) bool     { return item.Bool() }
 
 // 如果失败则不做更改
 func (r Raw) Set(key string, value any) Raw {
@@ -216,11 +229,11 @@ func (r Raw) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), e
 }
 
-func loMap[T, R any](collection []T, iteratee func(item T, index int) R) []R {
+func loMap[T, R any](collection []T, iteratee func(item T) R) []R {
 	result := make([]R, len(collection))
 
-	for i := range collection {
-		result[i] = iteratee(collection[i], i)
+	for i, item := range collection {
+		result[i] = iteratee(item)
 	}
 
 	return result

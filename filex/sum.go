@@ -15,7 +15,7 @@ import (
 )
 
 func CheckSum(ctx context.Context, fn, digest string) bool {
-	return errx.Select(CheckSumE(ctx, fn, digest))
+	return errx.May(CheckSumE(ctx, fn, digest))
 }
 
 func CheckSumE(ctx context.Context, fn, digest string) (pass bool, err error) {

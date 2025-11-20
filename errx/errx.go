@@ -64,7 +64,7 @@ func May[T any](v T, err error) (r T) {
 // 如果 err 不是零值，打印输出
 func Ig(err error) {
 	if err != nil {
-		errPrint("忽略关闭错误", "err", err)
+		errPrint("忽略错误", "err", err)
 	}
 }
 

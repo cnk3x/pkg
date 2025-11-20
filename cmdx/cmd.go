@@ -134,11 +134,11 @@ func Start(ctx context.Context, options ...Option) *Program {
 			}
 		}
 
-		s.log.Debug("starting", "cmdline", c.String())
+		s.log.Debug("启动", "cmdline", c.String())
 		if err = c.Start(); err != nil {
 			return errx.Errorf("cmdx: %w", err)
 		}
-		s.log.Debug("started", "pid", c.Process.Pid)
+		s.log.Debug("已启动", "pid", c.Process.Pid)
 
 		statusUp(statusRunning)
 		if err = c.Wait(); err != nil {
@@ -213,13 +213,13 @@ func Start(ctx context.Context, options ...Option) *Program {
 }
 
 // 启动
-func (s *Program) Start() error { s.call(s.start, "start"); return nil }
+func (s *Program) Start() error { s.call(s.start, "启动"); return nil }
 
 // 重启
-func (s *Program) Restart() error { s.call(s.restart, "restart"); return nil }
+func (s *Program) Restart() error { s.call(s.restart, "重启"); return nil }
 
 // 停止
-func (s *Program) Stop() error { s.call(s.stop, "stop"); return nil }
+func (s *Program) Stop() error { s.call(s.stop, "停止"); return nil }
 
 // 取得退出信号
 func (s *Program) Done() <-chan struct{} { return s.done }
@@ -229,7 +229,7 @@ func (s *Program) Status() string { return s.status }
 
 func (s *Program) call(cancel context.CancelFunc, name string) {
 	if cancel != nil {
-		slog.Debug("请求命令", "name", name)
+		slog.Debug("请求命令: " + name)
 		cancel()
 	}
 }

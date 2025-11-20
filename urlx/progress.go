@@ -1,81 +1,69 @@
 package urlx
 
 import (
+	"io"
 	"net/http"
 	"time"
 )
 
-// ProgressReport 进度报告方法
-type ProgressReport = func(total float64, cur float64, speed float64)
+type ProgressState struct {
+	Total   float64 // 总字节数
+	Current float64 // 当前已读/写取字节数
+	Speed   float64 // 当前读/写速度（字节/秒）
+}
 
-// Progress 下载进度, reportInterval 报告的时间间隔, 最小1秒, 默认2秒
-func Progress(report ProgressReport, reportInterval ...time.Duration) ProcessMw {
-	var interval time.Duration
+type ProgressReport func(state ProgressState)
 
-	for _, ri := range reportInterval {
-		if ri > time.Second {
-			interval = ri
-			break
-		}
-	}
-
-	if interval < time.Second {
-		interval = time.Second * 2
-	}
-
-	return func(next Process) Process {
-		return func(resp *http.Response) error {
-			var (
-				body  = resp.Body
-				total = float64(resp.ContentLength)
-				cur   = float64(0) //当前已读取
-
-				cTime  time.Time //上一次计算速度的时间
-				cBytes float64   //从上一次计算速度的时间之后新读取的字节数
-			)
-
-			calc := func(n ...time.Time) {
-				var now time.Time
-				if len(n) > 0 {
-					now = n[0]
-				} else {
-					now = time.Now()
-				}
-
-				if d := now.Sub(cTime); len(n) == 0 || d >= interval {
-					report(total, cur, cBytes/d.Seconds())
-					cTime = now
-					cBytes = 0
-				}
-			}
-
-			reader := func(p []byte) (n int, err error) {
-				if cTime.IsZero() {
-					cTime = time.Now()
-				}
-
-				if n, err = body.Read(p); err != nil {
-					return
-				}
-
-				fv := float64(n)
-				cur += fv
-				cBytes += fv
-
-				if report != nil {
-					calc(time.Now())
-				}
-				return
-			}
-
-			defer calc()
-			resp.Body = rFunc(reader)
-			return next(resp)
-		}
+// Progress 下载进度
+func Progress(report ProgressReport) Process {
+	return func(resp *http.Response) error {
+		body := resp.Body
+		resp.Body = io.NopCloser(ProgressReader(body, float64(resp.ContentLength), report))
+		return nil
 	}
 }
 
-type rFunc func(p []byte) (n int, err error)
+func ProgressReader(r io.Reader, total float64, report ProgressReport) io.Reader {
+	return fReader(ProgressStream(r.Read, total, report))
+}
 
-func (f rFunc) Read(p []byte) (n int, err error) { return f(p) }
-func (rFunc) Close() error                       { return nil }
+func ProgressWriter(w io.Writer, total float64, report ProgressReport) io.Writer {
+	return fWriter(ProgressStream(w.Write, total, report))
+}
+
+func ProgressStream(process func([]byte) (int, error), total float64, report ProgressReport) func([]byte) (int, error) {
+	var (
+		cur       float64   // 当前已读/写取字节数
+		rpt_bytes float64   // 上一次报告的字节数
+		rpt_time  time.Time // 上一次报告的时间
+	)
+
+	return func(p []byte) (n int, err error) {
+		if n, err = process(p); err != nil {
+			return
+		}
+		cur += float64(n)
+
+		now := time.Now()
+		if rpt_time.IsZero() {
+			rpt_time = now
+			return
+		}
+
+		if d := now.Sub(rpt_time); d >= time.Second || cur >= total {
+			speed := (cur - rpt_bytes) / d.Seconds()
+			rpt_bytes, rpt_time = cur, now
+			report(ProgressState{Total: total, Current: cur, Speed: speed})
+		}
+
+		return
+	}
+}
+
+type fReader func(p []byte) (n int, err error)
+
+func (f fReader) Read(p []byte) (n int, err error) { return f(p) }
+
+type fWriter func(p []byte) (n int, err error)
+
+func (f fWriter) Write(p []byte) (n int, err error) { return f(p) }

@@ -386,7 +386,7 @@ func appendSource(buf *buffer, src *slog.Source) {
 	// _, _ = buf.WriteString(filepath.Join(filepath.Base(dir), file))
 	// _, _ = buf.WriteString(filepath.Base(src.File))
 	// _ = buf.WriteByte(':')
-	fmt.Fprintf(buf, "%11s:%-4d", filepath.Base(src.File), src.Line)
+	fmt.Fprintf(buf, "%15s:%-3d", filepath.Base(src.File), src.Line)
 	// *buf = strconv.AppendInt(*buf, int64(src.Line), 10)
 }
 
