@@ -1,0 +1,3 @@
+{
+  "go.testFlags": ["-gcflags=all=-N", "-gcflags=all=-l", "-count=1", "-v", "-timeout=90s"]
+}

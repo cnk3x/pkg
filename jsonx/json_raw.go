@@ -3,6 +3,7 @@ package jsonx
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -55,4 +56,12 @@ func eDebug(r Raw, err error) Raw {
 		return ""
 	}
 	return r
+}
+
+func Read(r io.Reader) (Raw, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return Raw(data), nil
 }

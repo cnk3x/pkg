@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/arrx"
 	"github.com/cnk3x/gopkg/logx"
+	"github.com/cnk3x/gopkg/x"
 	"github.com/samber/lo"
 )
 
@@ -63,7 +64,7 @@ func ServerStart(ctx context.Context, log *slog.Logger, options ...ServerOption)
 		case <-ctx.Done():
 			shutdown_ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 			_ = cancel
-			errx.Ig(s.Shutdown(shutdown_ctx))
+			x.Ig(s.Shutdown(shutdown_ctx))
 		}
 	}()
 
@@ -86,14 +87,14 @@ func ServerStart(ctx context.Context, log *slog.Logger, options ...ServerOption)
 			port := lo.Ternary(t.Port == 80, "", ":"+strconv.Itoa(t.Port))
 
 			if t.IP.IsUnspecified() {
-				allIp := lo.Flatten(lo.Map(
-					errx.May(net.Interfaces()),
-					func(ifi net.Interface, _ int) []string {
-						return lo.FilterMap(errx.May(ifi.Addrs()), na2s)
+				allIp := arrx.Flatten(arrx.Map(
+					x.May(net.Interfaces()),
+					func(ifi net.Interface) []string {
+						return lo.FilterMap(x.May(ifi.Addrs()), na2s)
 					},
 				))
 				slices.Sort(allIp)
-				lo.ForEach(allIp, func(ip string, i int) {
+				arrx.EachIndex(allIp, func(ip string, i int) {
 					log.InfoContext(ctx, fmt.Sprintf("访问端点: %2d: http://%s%s", i, ip, port))
 				})
 				return

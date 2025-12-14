@@ -21,3 +21,5 @@ ehthumbs_vista.db
 vendor/
 .idea/
 .temp/
+go.work
+go.work.*

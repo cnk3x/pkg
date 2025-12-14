@@ -3,53 +3,108 @@ package webx
 import (
 	"cmp"
 	"context"
-	"encoding/json"
-	"io"
+	"fmt"
 	"net/http"
+
+	"github.com/cnk3x/gopkg/webx/respond"
 )
 
-func Func(handle func() error) http.Handler {
+func HandleSimple(handle func()) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := handle(); err != nil {
+		handle()
+	})
+}
+
+func HandleForm(handle func(value string), field string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handle(r.FormValue(field))
+	})
+}
+
+// func HandleFunc1(handle func() error) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		if err := handle(); err != nil {
+// 			Respond(w, r, E(err))
+// 		}
+// 	})
+// }
+
+// func HandleContext(handle func(context.Context)) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		handle(r.Context())
+// 	})
+// }
+
+// func HandleContextE(handle func(context.Context) error) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		if err := handle(r.Context()); err != nil {
+// 			Respond(w, r, E(err))
+// 		}
+// 	})
+// }
+
+func HandleFunc[T func() | func() error | func(context.Context) | func(context.Context) error](handle T) http.Handler {
+	var h func(context.Context) error
+	switch t := any(handle).(type) {
+	case func():
+		h = func(context.Context) error { t(); return nil }
+	case func() error:
+		h = func(context.Context) error { return t() }
+	case func(context.Context):
+		h = func(ctx context.Context) error { t(ctx); return nil }
+	case func(context.Context) error:
+		h = func(ctx context.Context) error { return t(ctx) }
+	default:
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, fmt.Sprintf("%T", handle), http.StatusNotImplemented)
+		})
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h(r.Context()); err != nil {
 			Respond(w, r, E(err))
 		}
 	})
 }
 
-func FuncContext(handle func(context.Context) error) http.Handler {
+func Handle[I, O any](handle func(context.Context, *I) (O, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := handle(r.Context()); err != nil {
-			Respond(w, r, E(err))
+		in, err := respond.DecodeBody[I](r)
+		if err != nil {
+			respond.Status(r, http.StatusBadRequest)
+			respond.Respond(w, r, E(err, "RESOLVE_INPUT"))
+			return
 		}
+
+		out, err := handle(r.Context(), in)
+		if err != nil {
+			respond.Status(r, http.StatusInternalServerError)
+			respond.Respond(w, r, E(err, "PROCESS"))
+			return
+		}
+
+		respond.Respond(w, r, out)
 	})
 }
 
-func JSON[T *I, I, O any](handle func(ctx context.Context, params T) (O, error)) http.Handler {
+func HandleSSE[I, O any](handle func(context.Context, *I) (<-chan O, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var data []byte
-		var err error
 		var in I
-		var out O
-
-		if data, err = io.ReadAll(r.Body); err != nil {
-			StatusSet(r, http.StatusBadRequest)
-			Respond(w, r, E(err, "READ_BODY"))
+		if err := respond.UnmarshalBody(r, &in); err != nil {
+			respond.Status(r, http.StatusBadRequest)
+			respond.Respond(w, r, E(err, "RESOLVE_INPUT"))
 			return
 		}
 
-		if err = json.Unmarshal(data, in); err != nil {
-			StatusSet(r, http.StatusBadRequest)
-			Respond(w, r, E(err, "PARSER_BODY"))
+		out, err := handle(r.Context(), &in)
+		if err != nil {
+			respond.Status(r, http.StatusInternalServerError)
+			respond.Respond(w, r, E(err, "PROCESS"))
 			return
 		}
 
-		if out, err = handle(r.Context(), &in); err != nil {
-			StatusSet(r, http.StatusInternalServerError)
-			Respond(w, r, E(err, "PROCESS"))
-			return
-		}
-
-		Respond(w, r, out)
+		respond.ServerEvent(w, r, respond.ServerEventSource[O]{Heartbeat: 30, Data: out})
+		respond.Respond(w, r, out)
 	})
 }
 

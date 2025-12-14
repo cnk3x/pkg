@@ -57,7 +57,7 @@ func ReplaceInline(src []string, tagFinds ...TagFind) {
 	}
 }
 
-func ReplaceWith(src string, args ...any) string {
+func ReplaceWithTagArg(src string, args ...any) string {
 	return Replace(src, TagArg(args...))
 }
 

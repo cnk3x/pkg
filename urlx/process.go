@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -17,19 +16,8 @@ type Process = func(resp *http.Response) error // 响应处理器
 // Use 添加中间件（Process前置处理）
 func (c *Request) Use(processes ...Process) *Request { c.uses = append(c.uses, processes...); return c }
 
-func (c *Request) getLogger() (log func(context.Context, slog.Level, string, ...any), logLevel slog.Level) {
-	log, logLevel = slog.Log, c.logLevel
-	if c.log != nil {
-		log = c.log.Log
-	}
-	return
-}
-
 // Process 处理响应
 func (c *Request) Process(ctx context.Context, process Process, options ...Option) error {
-	log, logLevel := c.getLogger()
-
-	c.client = clientDefault()
 
 	for _, apply := range c.options {
 		if err := apply(c); err != nil {
@@ -43,13 +31,23 @@ func (c *Request) Process(ctx context.Context, process Process, options ...Optio
 		}
 	}
 
+	client := &http.Client{Transport: transportDefault()}
+
+	for _, cliOpt := range c.clientOptions {
+		if err := cliOpt(client); err != nil {
+			return err
+		}
+	}
+
 	method := c.method
 	if method == "" {
 		method = http.MethodGet
 	}
 
 	requestUrl := c.url
-	log(ctx, logLevel, "发起请求", "url", requestUrl, "method", method)
+
+	log := c.logger()
+	log(ctx, "发起请求", "url", requestUrl, "method", method)
 	if requestUrl == "" {
 		return errors.New("请求地址为空")
 	}
@@ -79,15 +77,10 @@ func (c *Request) Process(ctx context.Context, process Process, options ...Optio
 			headerProcess(req.Header)
 		}
 
-		client := c.client
-		if client == nil {
-			client = http.DefaultClient
-		}
-
 		if resp, err = client.Do(req); err != nil {
 			var ne net.Error
 			if i < len(c.tryTimes) && errors.As(err, &ne) {
-				log(ctx, logLevel, "返回错误", "try", i+1, "delay", c.tryTimes[i], "err", err)
+				log(ctx, "返回错误", "try", i+1, "delay", c.tryTimes[i], "err", err)
 				select {
 				case <-ctx.Done():
 					return err
@@ -95,14 +88,14 @@ func (c *Request) Process(ctx context.Context, process Process, options ...Optio
 					continue
 				}
 			}
-			log(ctx, logLevel, "返回错误", "try", i+1, "err", err)
+			log(ctx, "返回错误", "try", i+1, "err", err)
 			return err
 		}
 		break
 	}
 
 	body := resp.Body
-	defer closes(body, c.log.Warn)
+	defer closes(body, log)
 
 	for _, proc := range c.uses {
 		if err := proc(resp); err != nil {

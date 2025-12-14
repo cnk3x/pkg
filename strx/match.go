@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func Match(pattern, name string) bool {
+func GlobMatch(pattern, name string) bool {
 	if strings.EqualFold(name, pattern) {
 		return true
 	}

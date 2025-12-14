@@ -1,7 +1,7 @@
 package urlx
 
 import (
-	"log/slog"
+	"context"
 	"net/http"
 	"time"
 )
@@ -33,11 +33,11 @@ type Request struct {
 
 	// client fields
 	tryTimes []time.Duration // 重试时间和时机
-	client   *http.Client    // client
+	// client        *http.Client    // client
+	clientOptions []ClientOption //
 
 	//misc
-	log      *slog.Logger
-	logLevel slog.Level
+	log func(ctx context.Context, msg string, args ...any)
 
 	// 特别设置的头参数，优先级比通过 HeaderSet 方法设置的头参数高
 	userAgent string

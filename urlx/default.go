@@ -25,8 +25,8 @@ var (
 )
 
 // Default 默认的请求器
-func Default() *Request { return New().Try(300*ms, 800*ms, 1500*ms).With(DefaultAgent) }
-func Windows() *Request { return New().Try(300*ms, 800*ms, 1500*ms).With(WindowsEdgeAgent) }
-func Mac() *Request     { return New().Try(300*ms, 800*ms, 1500*ms).With(MacSafariAgent) }
-func IOS() *Request     { return New().Try(300*ms, 800*ms, 1500*ms).With(IOSSafariAgent) }
-func Android() *Request { return New().Try(300*ms, 800*ms, 1500*ms).With(AndroidWebkitAgent) }
+func Default() *Request { return New().ErrTry(300*ms, 800*ms, 1500*ms).With(DefaultAgent) }
+func Windows() *Request { return New().ErrTry(300*ms, 800*ms, 1500*ms).With(WindowsEdgeAgent) }
+func Mac() *Request     { return New().ErrTry(300*ms, 800*ms, 1500*ms).With(MacSafariAgent) }
+func IOS() *Request     { return New().ErrTry(300*ms, 800*ms, 1500*ms).With(IOSSafariAgent) }
+func Android() *Request { return New().ErrTry(300*ms, 800*ms, 1500*ms).With(AndroidWebkitAgent) }

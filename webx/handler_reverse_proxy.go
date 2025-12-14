@@ -6,11 +6,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/x"
 )
 
 func SingleHostReverseProxy(urlString string) http.Handler {
-	return httputil.NewSingleHostReverseProxy(errx.May(url.Parse(urlString)))
+	return httputil.NewSingleHostReverseProxy(x.May(url.Parse(urlString)))
 }
 
 func ReverseProxy(getUri func() *url.URL) http.Handler {

@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/x"
 )
 
 const DownloadTempExt = ".downloading"
@@ -58,7 +58,7 @@ func writeFile(path string, body io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer errx.Close(f, "关闭写入的文件")
+	defer x.Close(f, "关闭写入的文件")
 	_, err = f.ReadFrom(body)
 	return err
 }

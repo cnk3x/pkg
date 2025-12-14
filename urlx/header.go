@@ -26,32 +26,7 @@ func (c *Request) HeaderSet(key, value string) *Request {
 }
 
 func (c *Request) HeaderSets(lines ...string) *Request {
-	c.headers = append(c.headers, func(headers http.Header) {
-		for _, line := range lines {
-			if line = strings.TrimSpace(line); line != "" {
-				switch line[0] {
-				case '-':
-					for _, key := range strings.Split(line[1:], ",") {
-						if key = strings.TrimSpace(key); key != "" {
-							headers.Del(key)
-						}
-					}
-				case '+':
-					if key, val, ok := strings.Cut(line[1:], ":"); ok {
-						if key = strings.TrimSpace(key); key != "" {
-							headers.Add(key, strings.TrimSpace(val))
-						}
-					}
-				default:
-					if key, val, ok := strings.Cut(line, ":"); ok {
-						if key = strings.TrimSpace(key); key != "" {
-							headers.Add(key, strings.TrimSpace(val))
-						}
-					}
-				}
-			}
-		}
-	})
+	c.headers = append(c.headers, headerSets(lines))
 	return c
 }
 
@@ -61,8 +36,8 @@ func HeaderSet(key, value string) Option {
 }
 
 // HeaderSets 设置请求头
-func HeaderSets(lines string) Option {
-	return func(c *Request) error { c.HeaderSets(lines); return nil }
+func HeaderSets(lines ...string) Option {
+	return func(c *Request) error { c.HeaderSets(lines...); return nil }
 }
 
 func Headers(options ...HeaderOption) Option {

@@ -12,6 +12,7 @@ import (
 	"github.com/cnk3x/gopkg/errx"
 	"github.com/cnk3x/gopkg/jsonx"
 	"github.com/cnk3x/gopkg/logx"
+	"github.com/cnk3x/gopkg/x"
 )
 
 // 状态
@@ -187,7 +188,7 @@ func Start(ctx context.Context, options ...Option) *Program {
 	go func(ctx context.Context) {
 		defer close(done)
 
-		defer s.log.Debug("🔚结束")
+		defer s.log.Debug("🔚 结束")
 		s.log.Debug("初始化完成")
 
 		for {
@@ -208,7 +209,7 @@ func Start(ctx context.Context, options ...Option) *Program {
 	}(ctx)
 
 	<-initialized
-	errx.Ig(s.Start())
+	x.Ig(s.Start())
 	return s
 }
 

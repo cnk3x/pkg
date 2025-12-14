@@ -1,6 +1,7 @@
 package urlx
 
 import (
+	"context"
 	"fmt"
 	"io"
 )
@@ -21,10 +22,10 @@ func Func2DelE[T, T2 any](f func(T, T2) error) func(T, T2) {
 	return func(t T, t2 T2) { errIg(f(t, t2)) }
 }
 
-func closes(closer io.Closer, log ...func(msg string, args ...any)) {
+func closes(closer io.Closer, log ...Logger) {
 	if err := closer.Close(); err != nil {
 		for _, l := range log {
-			l(fmt.Sprintf("close %T failed", closer), "err", err)
+			l(context.Background(), fmt.Sprintf("close %T failed", closer), "err", err)
 		}
 	}
 }

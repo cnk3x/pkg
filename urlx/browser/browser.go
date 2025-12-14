@@ -50,7 +50,7 @@ func Referer(referer string) Option {
 // Browser 浏览器
 func Browser() *Request {
 	ms := time.Millisecond
-	return urlx.New().With(AcceptHTML, AcceptChinese).Try(ms*300, ms*800, ms*1500)
+	return urlx.New().With(AcceptHTML, AcceptChinese).ErrTry(ms*300, ms*800, ms*1500)
 }
 
 // MacEdge Mac Edge 浏览器

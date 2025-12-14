@@ -12,36 +12,50 @@ import (
 
 /* 设置客户端 */
 
-func clientDefault() *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
+type ClientOption func(cli *http.Client) error
+
+func transportDefault() *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 }
 
-// Try 失败重试，等待休眠时间
-func (c *Request) Try(times ...time.Duration) *Request { c.tryTimes = times; return c }
+// Client 使用自定义的HTTP客户端
+func Client(client ClientOption) Option {
+	return func(r *Request) error {
+		r.clientOptions = append(r.clientOptions, client)
+		return nil
+	}
+}
 
-// Client 使用的客户端定义
-func (c *Request) Client(client *http.Client) *Request { c.client = client; return c }
+// Client 使用自定义的HTTP客户端
+func (c *Request) Client(clientOptions ...ClientOption) *Request {
+	c.clientOptions = append(c.clientOptions, clientOptions...)
+	return c
+}
 
 // RoundTrip 自定义 RoundTripper
 func (c *Request) RoundTrip(transport http.RoundTripper) *Request {
-	c.client.Transport = transport
-	return c
+	return c.Client(func(cli *http.Client) error {
+		cli.Transport = transport
+		return nil
+	})
 }
 
 // Proxy 设置代理
 func Proxy(proxyUrlString string) Option {
-	return func(r *Request) error {
-		if tr, ok := r.client.Transport.(*http.Transport); ok {
+	return Client(func(cli *http.Client) error {
+		if cli.Transport == nil {
+			cli.Transport = transportDefault()
+			return nil
+		}
+		if tr, ok := cli.Transport.(*http.Transport); ok {
 			fixedURL, err := url.Parse(proxyUrlString)
 			if err != nil {
 				return err
@@ -50,12 +64,12 @@ func Proxy(proxyUrlString string) Option {
 			return nil
 		}
 
-		if tr, ok := r.client.Transport.(interface{ SetProxy(string) error }); ok {
+		if tr, ok := cli.Transport.(interface{ SetProxy(string) error }); ok {
 			return tr.SetProxy(proxyUrlString)
 		}
 
-		return fmt.Errorf("不支持的 Transport 类型: %T", r.client.Transport)
-	}
+		return fmt.Errorf("不支持的 Transport 类型: %T", cli.Transport)
+	})
 }
 
 // CookieEnabled 开关 Cookie
@@ -68,30 +82,32 @@ func CookieEnabled(enabled ...bool) Option {
 
 // Jar 设置Cookie容器
 func Jar(jar http.CookieJar) Option {
-	return func(c *Request) error {
-		c.client.Jar = jar
+	return Client(func(cli *http.Client) error {
+		cli.Jar = jar
 		return nil
-	}
+	})
 }
 
-// UseClient 使用自定义的HTTP客户端
-func Client(client *http.Client) Option {
-	return func(r *Request) error {
-		r.client = client
-		return nil
-	}
+// ErrTry 失败重试，等待休眠时间
+func (c *Request) ErrTry(times ...time.Duration) *Request {
+	c.tryTimes = times
+	return c
 }
 
 // Idempotent 幂等重试
 func Idempotent(base time.Duration, maxTimes int) Option {
-	trys := make([]time.Duration, maxTimes)
+	tryAts := make([]time.Duration, maxTimes)
 	for i := range maxTimes {
-		trys[i] = base * (1 << i)
+		tryAts[i] = base * (1 << i)
 	}
 	return func(r *Request) error {
-		if len(trys) > 0 {
-			r.Try(trys...)
+		if len(tryAts) > 0 {
+			r.ErrTry(tryAts...)
 		}
 		return nil
 	}
+}
+
+func ErrTry(tryAt ...time.Duration) Option {
+	return func(c *Request) error { c.ErrTry(tryAt...); return nil }
 }

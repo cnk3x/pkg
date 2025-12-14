@@ -1,15 +1,12 @@
 package json
 
-import "github.com/goccy/go-json"
+import (
+	"encoding/json"
+)
 
 type (
-	Encoder          = json.Encoder
-	EncodeOption     = json.EncodeOption
-	EncodeOptionFunc = json.EncodeOptionFunc
-
-	Decoder          = json.Decoder
-	DecodeOption     = json.DecodeOption
-	DecodeOptionFunc = json.DecodeOptionFunc
+	Encoder = json.Encoder
+	Decoder = json.Decoder
 
 	RawMessage = json.RawMessage
 	Number     = json.Number

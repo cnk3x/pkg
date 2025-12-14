@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/x"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -25,7 +25,7 @@ func Get[T ~string | ~[]byte](src T, key ...string) Raw {
 }
 
 func New(key string, value any) Raw {
-	return Raw(errx.Must(sjson.Set(``, key, value)))
+	return Raw(x.Must(sjson.Set(``, key, value)))
 }
 
 func (r *Raw) UnmarshalJSON(bytes []byte) error { *r = Raw(bytes); return nil }
@@ -239,13 +239,10 @@ func loMap[T, R any](collection []T, iteratee func(item T) R) []R {
 	return result
 }
 
-// func parseInt(s string) (n int64, ok bool) {
-// 	for i := 0; i < len(s); i++ {
-// 		if s[i] >= '0' && s[i] <= '9' {
-// 			n = n*10 + int64(s[i]-'0')
-// 		} else {
-// 			return 0, false
-// 		}
-// 	}
-// 	return n, true
-// }
+func FieldIs(field, value string) func(item Raw) bool {
+	return func(item Raw) bool { return item.GetString(field) == value }
+}
+
+func KeyIs(field string) func(item Raw) string {
+	return func(node Raw) string { return node.GetString(field) }
+}

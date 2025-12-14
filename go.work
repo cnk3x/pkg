@@ -6,6 +6,7 @@ use (
 	./gormx/mysql
 	./gormx/pg
 	./gormx/sqlite
+	./jsx
 	./urlx/charset
 	./urlx/codec/form
 	./urlx/codec/html

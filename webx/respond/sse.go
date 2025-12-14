@@ -2,6 +2,7 @@ package respond
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/cnk3x/gopkg/syncx"
 )
 
-type ServerEventSource struct {
+type ServerEventSource[T any] struct {
 	// Retry 指定浏览器重新发起连接的时间间隔。
 	//
 	// 两种情况会导致浏览器重新发起连接
@@ -27,16 +28,16 @@ type ServerEventSource struct {
 	Heartbeat int
 
 	// 数据
-	Data <-chan any
+	Data <-chan T
 
 	w io.Writer
 }
 
-func ServerEvent(w http.ResponseWriter, r *http.Request, source ServerEventSource) {
+func ServerEvent[T any](w http.ResponseWriter, r *http.Request, source ServerEventSource[T]) {
 	source.Upgrade(w, r)
 }
 
-func (se *ServerEventSource) Upgrade(w http.ResponseWriter, r *http.Request) {
+func (se *ServerEventSource[T]) Upgrade(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream; charset=utf-8")
 	h.Set("Cache-Control", "no-cache")
@@ -52,6 +53,7 @@ func (se *ServerEventSource) Upgrade(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 
+	se.w = w
 	if se.Retry > 0 {
 		se.Write(`retry`, []byte(strconv.Itoa(se.Retry)))
 		se.Flush()
@@ -61,7 +63,8 @@ func (se *ServerEventSource) Upgrade(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer close(done)
 
-		heartbeat, stop := syncx.Heartbeat(time.Duration(se.Heartbeat) * time.Second)
+		//默认30秒，最少5秒
+		heartbeat, stop := syncx.Heartbeat(time.Duration(max(cmp.Or(se.Heartbeat, 30), 5)) * time.Second)
 		defer stop()
 
 		for ctx := r.Context(); ; {
@@ -84,33 +87,33 @@ func (se *ServerEventSource) Upgrade(w http.ResponseWriter, r *http.Request) {
 	<-done
 }
 
-func (se *ServerEventSource) Flush() {
+func (se *ServerEventSource[T]) Flush() {
 	se.w.Write([]byte("\n")) // nolint: errcheck
 	if f, ok := se.w.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-func (se *ServerEventSource) Write(name string, line []byte) {
+func (se *ServerEventSource[T]) Write(name string, line []byte) {
 	se.w.Write([]byte(name)) // nolint: errcheck
 	se.w.Write([]byte(": ")) // nolint: errcheck
 	se.w.Write(line)         // nolint: errcheck
 	se.w.Write([]byte("\n")) // nolint: errcheck
 }
 
-func (se *ServerEventSource) WriteEvent(event string) {
+func (se *ServerEventSource[T]) WriteEvent(event string) {
 	if event != "" {
 		se.Write(KeyEvent, []byte(event))
 	}
 }
 
-func (se *ServerEventSource) WriteID(id string) {
+func (se *ServerEventSource[T]) WriteID(id string) {
 	if id != "" {
 		se.Write(KeyID, []byte(id))
 	}
 }
 
-func (se *ServerEventSource) WriteData(data ...[]byte) {
+func (se *ServerEventSource[T]) WriteData(data ...[]byte) {
 	for _, line := range data {
 		if line = bytes.TrimSpace(line); len(line) > 0 {
 			se.Write(KeyData, Escape(line))
@@ -118,7 +121,7 @@ func (se *ServerEventSource) WriteData(data ...[]byte) {
 	}
 }
 
-func (se *ServerEventSource) WriteAnyData(data ...any) {
+func (se *ServerEventSource[T]) WriteAnyData(data ...any) {
 	// nolint: errcheck
 	for _, line := range data {
 		se.w.Write([]byte(`data: `)) // nolint: errcheck
@@ -137,7 +140,7 @@ func (se *ServerEventSource) WriteAnyData(data ...any) {
 	se.Flush()
 }
 
-func (se *ServerEventSource) WriteFull(id, event string, data ...[]byte) {
+func (se *ServerEventSource[T]) WriteFull(id, event string, data ...[]byte) {
 	if id != "" {
 		se.Write(KeyID, []byte(id))
 	}
@@ -151,7 +154,7 @@ func (se *ServerEventSource) WriteFull(id, event string, data ...[]byte) {
 	se.Flush()
 }
 
-func (se *ServerEventSource) WriteEventData(event string, data any) {
+func (se *ServerEventSource[T]) WriteEventData(event string, data any) {
 	se.WriteEvent(event)
 	se.WriteAnyData(data)
 }

@@ -12,10 +12,11 @@ import (
 	"strings"
 
 	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/x"
 )
 
 func CheckSum(ctx context.Context, fn, digest string) bool {
-	return errx.May(CheckSumE(ctx, fn, digest))
+	return x.May(CheckSumE(ctx, fn, digest))
 }
 
 func CheckSumE(ctx context.Context, fn, digest string) (pass bool, err error) {

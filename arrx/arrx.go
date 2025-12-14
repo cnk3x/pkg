@@ -164,6 +164,12 @@ func Each[T any](list []T, fn func(T)) {
 	}
 }
 
+func EachIndex[T any](list []T, fn func(T, int)) {
+	for i, v := range list {
+		fn(v, i)
+	}
+}
+
 // Uniq returns a duplicate-free version of a slice, in which only the first occurrence of each element is kept.
 // The order of result values is determined by the order they occur in the slice.
 // Play: https://go.dev/play/p/DTzbeXZ6iEN

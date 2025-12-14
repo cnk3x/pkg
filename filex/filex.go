@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cnk3x/gopkg/errx"
+	"github.com/cnk3x/gopkg/x"
 )
 
 // ProcessFunc 定义了对已打开文件进行自定义处理的函数签名
@@ -40,7 +40,7 @@ func ProgressJoin(progress ...ProgressFunc) ProgressFunc {
 }
 
 // Cat 一次性读取文件全部内容并以字符串形式返回
-func Cat(filePath string, trimSpace ...bool) string { return errx.May(CatE(filePath, trimSpace...)) }
+func Cat(filePath string, trimSpace ...bool) string { return x.May(CatE(filePath, trimSpace...)) }
 
 func CatE(filePath string, trimSpace ...bool) (string, error) {
 	bs, err := os.ReadFile(filePath)
