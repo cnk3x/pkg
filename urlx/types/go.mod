@@ -1,3 +1,3 @@
-module github.com/cnk3x/gopkg/urlx/types
+module github.com/cnk3x/pkg/urlx/types
 
 go 1.18

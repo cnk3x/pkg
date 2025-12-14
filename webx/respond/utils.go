@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/cnk3x/gopkg/syncx"
+	"github.com/cnk3x/pkg/syncx"
 )
 
 var bufPool = syncx.NewPool[bytes.Buffer]()

@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/gormx
+module github.com/cnk3x/pkg/gormx
 
 go 1.25.3
 

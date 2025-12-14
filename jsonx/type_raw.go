@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/x"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )

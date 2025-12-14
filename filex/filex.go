@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/x"
 )
 
 // ProcessFunc 定义了对已打开文件进行自定义处理的函数签名

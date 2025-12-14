@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/cnk3x/gopkg/urlx/types"
+	"github.com/cnk3x/pkg/urlx/types"
 )
 
 var (

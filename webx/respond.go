@@ -3,7 +3,7 @@ package webx
 import (
 	"net/http"
 
-	"github.com/cnk3x/gopkg/webx/respond"
+	"github.com/cnk3x/pkg/webx/respond"
 )
 
 type M = respond.M

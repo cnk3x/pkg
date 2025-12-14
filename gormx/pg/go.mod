@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/gormx/pg
+module github.com/cnk3x/pkg/gormx/pg
 
 go 1.25.3
 

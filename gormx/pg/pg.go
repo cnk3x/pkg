@@ -4,7 +4,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/cnk3x/gopkg/gormx"
+	"github.com/cnk3x/pkg/gormx"
 )
 
 func Open(cfg *gormx.Config) (gorm.Dialector, error) {

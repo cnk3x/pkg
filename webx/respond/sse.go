@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cnk3x/gopkg/jsonx"
-	"github.com/cnk3x/gopkg/syncx"
+	"github.com/cnk3x/pkg/jsonx"
+	"github.com/cnk3x/pkg/syncx"
 )
 
 type ServerEventSource[T any] struct {

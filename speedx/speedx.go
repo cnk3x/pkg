@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cnk3x/gopkg/urlx"
+	"github.com/cnk3x/pkg/urlx"
 )
 
 // Downloader 是一个高级下载器

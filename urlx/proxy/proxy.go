@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Qingluan/merkur"
-	"github.com/cnk3x/gopkg/urlx"
+	"github.com/cnk3x/pkg/urlx"
 )
 
 // WithUri 使用代理，支持 ss:// ssr:// vmess:// http:// https:// sock5://

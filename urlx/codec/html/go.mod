@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/urlx/codec/html
+module github.com/cnk3x/pkg/urlx/codec/html
 
 go 1.23.0
 

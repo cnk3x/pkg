@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/x"
 )
 
 const DownloadTempExt = ".downloading"

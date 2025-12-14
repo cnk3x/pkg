@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cnk3x/gopkg/urlx"
+	"github.com/cnk3x/pkg/urlx"
 )
 
 const (

@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cnk3x/gopkg/errx"
-	"github.com/cnk3x/gopkg/jsonx"
-	"github.com/cnk3x/gopkg/logx"
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/errx"
+	"github.com/cnk3x/pkg/jsonx"
+	"github.com/cnk3x/pkg/logx"
+	"github.com/cnk3x/pkg/x"
 )
 
 // 状态

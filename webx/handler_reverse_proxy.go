@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/x"
 )
 
 func SingleHostReverseProxy(urlString string) http.Handler {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/cnk3x/gopkg/filex"
+	"github.com/cnk3x/pkg/filex"
 )
 
 type options struct {

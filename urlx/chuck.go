@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/cnk3x/gopkg/errx"
-	"github.com/cnk3x/gopkg/jsonx"
+	"github.com/cnk3x/pkg/errx"
+	"github.com/cnk3x/pkg/jsonx"
 	"golang.org/x/net/http/httpproxy"
 )
 

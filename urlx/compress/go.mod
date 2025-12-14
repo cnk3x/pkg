@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/urlx/compress
+module github.com/cnk3x/pkg/urlx/compress
 
 go 1.18
 

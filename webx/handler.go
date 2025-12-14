@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cnk3x/gopkg/webx/respond"
+	"github.com/cnk3x/pkg/webx/respond"
 )
 
 func HandleSimple(handle func()) http.Handler {

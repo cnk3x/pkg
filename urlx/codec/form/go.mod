@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/urlx/codec/form
+module github.com/cnk3x/pkg/urlx/codec/form
 
 go 1.18
 

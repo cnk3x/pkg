@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/gormx/mysql
+module github.com/cnk3x/pkg/gormx/mysql
 
 go 1.25.3
 

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cnk3x/gopkg/arrx"
-	"github.com/cnk3x/gopkg/logx"
-	"github.com/cnk3x/gopkg/x"
+	"github.com/cnk3x/pkg/arrx"
+	"github.com/cnk3x/pkg/logx"
+	"github.com/cnk3x/pkg/x"
 	"github.com/samber/lo"
 )
 

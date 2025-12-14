@@ -3,7 +3,7 @@ package configx
 import (
 	"runtime"
 
-	"github.com/cnk3x/gopkg/strx"
+	"github.com/cnk3x/pkg/strx"
 )
 
 const (

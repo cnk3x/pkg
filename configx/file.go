@@ -6,8 +6,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cnk3x/gopkg/errx"
-	"github.com/cnk3x/gopkg/jsonx"
+	"github.com/cnk3x/pkg/errx"
+	"github.com/cnk3x/pkg/jsonx"
 )
 
 // FindFile 查找文件，支持多个扩展名。

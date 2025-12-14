@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/urlx/proxy
+module github.com/cnk3x/pkg/urlx/proxy
 
 go 1.24.0
 

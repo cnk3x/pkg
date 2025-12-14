@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg
+module github.com/cnk3x/pkg
 
 go 1.25.0
 

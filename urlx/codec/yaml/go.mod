@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/urlx/codec/yaml
+module github.com/cnk3x/pkg/urlx/codec/yaml
 
 go 1.24.0
 

@@ -1,4 +1,4 @@
-module github.com/cnk3x/gopkg/jsx
+module github.com/cnk3x/pkg/jsx
 
 go 1.25.3
 

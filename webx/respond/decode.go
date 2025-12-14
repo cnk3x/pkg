@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/cnk3x/gopkg/jsonx"
+	"github.com/cnk3x/pkg/jsonx"
 	"github.com/go-playground/form/v4"
 )
 
