@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cnk3x/pkg/filex"
 	"github.com/cnk3x/pkg/rex"
 	"github.com/fsnotify/fsnotify"
 	"github.com/samber/lo"
@@ -65,7 +66,7 @@ func (w *Watcher) Handle(name string, options ...HandlerOption) {
 }
 
 func (w *Watcher) Run(ctx context.Context) (err error) {
-	slog.Info("watcher run", "err", err)
+	slog.Info("watcher run")
 	defer slog.Info("watcher done", "err", err)
 
 	w.ctx = ctx
@@ -78,6 +79,8 @@ func (w *Watcher) Run(ctx context.Context) (err error) {
 			return
 		}
 	}
+
+	w.watches = w.fw.WatchList()
 
 	for _, f := range w.watches {
 		slog.Debug("watches", "path", f)
@@ -176,15 +179,20 @@ func (w *Watcher) Add(fullPath string) (err error) {
 	return
 }
 
-func (w *Watcher) addRecursive(fullPath string) (err error) {
-	e := FileWalk(fullPath, WalkFilter(w.filter), WithSkipFile, Walk(func(subPath string) {
-		if !lo.ContainsBy(w.watches, func(p string) bool { return strings.HasPrefix(subPath, p) }) {
-			err = errors.Join(err, w.fw.Add(subPath))
+func (w *Watcher) addRecursive(dir string) (err error) {
+	if e := filex.Walk(dir, w.filter, func(fullPath string) error {
+		if !filex.PathIsDir(fullPath) {
+			return nil
 		}
-	}))
-	if e != nil {
+		if !lo.ContainsBy(w.watches, func(p string) bool { return strings.HasPrefix(fullPath, p) }) {
+			err = errors.Join(err, w.fw.Add(fullPath))
+		}
+		return nil
+	}); e != nil {
 		err = errors.Join(err, e)
 	}
+
+	w.watches = w.fw.WatchList()
 	return
 }
 
