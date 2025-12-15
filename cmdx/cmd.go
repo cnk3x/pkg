@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cnk3x/pkg/cmdo"
 	"github.com/cnk3x/pkg/errx"
 	"github.com/cnk3x/pkg/jsonx"
 	"github.com/cnk3x/pkg/logx"
@@ -29,8 +30,8 @@ type Config struct {
 	Env        jsonx.Strings  `json:"env,omitempty"`
 	InheritEnv bool           `json:"inherit_env,omitempty"`
 	Dir        string         `json:"dir,omitempty"`
-	Log        LogConfig      `json:"log,omitempty"`
-	Restart    RestartConfig  `json:"restart,omitempty"`
+	Log        LogConfig      `json:"log"`
+	Restart    RestartConfig  `json:"restart"`
 	WaitDelay  jsonx.Duration `json:"wait_delay,omitempty"`
 }
 
@@ -94,7 +95,7 @@ func Start(ctx context.Context, options ...Option) *Program {
 		x := s.cfg
 		c := exec.CommandContext(restart_ctx, x.Path, x.Args...)
 		c.SysProcAttr = &syscall.SysProcAttr{}
-		setupCmd(c)
+		cmdo.PKill(c)
 		c.Dir = x.Dir
 
 		if x.InheritEnv {
@@ -103,24 +104,6 @@ func Start(ctx context.Context, options ...Option) *Program {
 		c.Env = append(c.Env, x.Env...)
 
 		c.WaitDelay = max(x.WaitDelay.Value(), time.Second*5) //调用cancel后等待退出，最低5s
-		c.Cancel = func() (err error) {
-			if c.Process == nil || c.ProcessState != nil {
-				s.log.Debug("[cancel] 未运行")
-				return
-			}
-
-			if err = cancelProc(c.Process); err == nil {
-				s.log.Debug("[cancel] 自定义调用，返回成功")
-				return
-			}
-
-			s.log.Debug("[cancel] 自定义调用，返回错误，改默认调用", "err", err)
-			if err = c.Process.Kill(); err != nil {
-				s.log.Debug("[cancel] 默认调用，返回错误", "err", err)
-				return
-			}
-			return
-		}
 
 		l0, l1, lc, le := x.Log.Open()
 		if err = le; err != nil {

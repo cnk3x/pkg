@@ -15,7 +15,7 @@ func TestWatcher(t *testing.T) {
 
 	w := New(Root("../"), Filter(`!/\.(.*)`, "!modules"))
 
-	w.Handle("log", func(ev []fsnotify.Event) error {
+	w.Handle("log", func(ctx context.Context, ev []fsnotify.Event) error {
 		t.Log("handle", lo.Uniq(lo.Map(ev, func(e fsnotify.Event, _ int) string { return e.Name })))
 		return nil
 	}, Match(`!(.*)_test\.go$`))

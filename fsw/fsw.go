@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cnk3x/pkg/rex"
 	"github.com/fsnotify/fsnotify"
 	"github.com/samber/lo"
 )
@@ -25,6 +26,7 @@ type Watcher struct {
 	routes  []*Route
 	watches []string
 	fw      *fsnotify.Watcher
+	ctx     context.Context
 	mu      sync.Mutex
 }
 
@@ -39,7 +41,7 @@ func New(options ...Option) *Watcher {
 type Options struct {
 	Root     []string
 	Filter   []string
-	AllowOp  string
+	Event    string
 	Throttle time.Duration
 }
 
@@ -47,12 +49,12 @@ func WithOptions(options Options) *Watcher {
 	return New(
 		Root(options.Root...),
 		Filter(options.Filter...),
-		AllowOp(options.AllowOp),
+		AllowOp(options.Event),
 		Throttle(options.Throttle),
 	)
 }
 
-func (w *Watcher) Handle(name string, handler HandlerFunc, options ...HeaderOption) {
+func (w *Watcher) Handle(name string, handler HandlerFunc, options ...HandlerOption) {
 	r := &Route{
 		Name:    name,
 		Match:   nil,
@@ -62,7 +64,7 @@ func (w *Watcher) Handle(name string, handler HandlerFunc, options ...HeaderOpti
 	for _, opt := range options {
 		opt(r)
 	}
-	r.timer = time.AfterFunc(max(w.throttle, time.Second*3), r.Run)
+	r.timer = time.AfterFunc(max(w.throttle, time.Second*3), func() { r.Run(w.ctx) })
 	r.timer.Stop()
 	w.routes = append(w.routes, r)
 }
@@ -71,6 +73,7 @@ func (w *Watcher) Run(ctx context.Context) (err error) {
 	slog.Info("watcher run", "err", err)
 	defer slog.Info("watcher done", "err", err)
 
+	w.ctx = ctx
 	if w.fw, err = fsnotify.NewWatcher(); err != nil {
 		return
 	}
@@ -81,57 +84,47 @@ func (w *Watcher) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	var wg sync.WaitGroup
+	for _, f := range w.watches {
+		slog.Debug("watches", "path", f)
+	}
 
-	wg.Go(func() {
-		for _, f := range w.watches {
-			slog.Debug("watches", "path", f)
-		}
-
-		err = func() (err error) {
-			for {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("事件处理通道关闭: %w", context.Cause(ctx))
-				case e, ok := <-w.fw.Errors:
-					if !ok {
-						return
-					}
-					return e
-				case ev, ok := <-w.fw.Events:
-					if !ok {
-						return
-					}
-
-					if !w.filter(ev.Name) {
-						continue
-					}
-
-					switch {
-					case ev.Op.Has(fsnotify.Remove | fsnotify.Rename):
-						if e := w.Remove(ev.Name); e != nil {
-							slog.Debug("delRecursive", "err", e, "event", ev.Op.String())
-						}
-					case ev.Op.Has(fsnotify.Create):
-						if stat, e := os.Stat(ev.Name); e == nil && stat.IsDir() {
-							if e := w.Add(ev.Name); e != nil {
-								slog.Debug("addRecursive", "err", e, "event", ev.Op.String())
-							}
-						}
-					}
-
-					slog.Debug(fmt.Sprintf("handleEvent %s %s", ev.Op.String(), ev.Name))
-					w.handleEvent(ev)
+	err = func() (err error) {
+		for {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("事件处理通道关闭: %w", context.Cause(ctx))
+			case e, ok := <-w.fw.Errors:
+				if !ok {
+					return
 				}
+				return e
+			case ev, ok := <-w.fw.Events:
+				if !ok {
+					return
+				}
+
+				if !w.filter(ev.Name) {
+					continue
+				}
+
+				switch {
+				case ev.Op.Has(fsnotify.Remove | fsnotify.Rename):
+					if e := w.Remove(ev.Name); e != nil {
+						slog.Debug("delRecursive", "err", e, "event", ev.Op.String())
+					}
+				case ev.Op.Has(fsnotify.Create):
+					if stat, e := os.Stat(ev.Name); e == nil && stat.IsDir() {
+						if e := w.Add(ev.Name); e != nil {
+							slog.Debug("addRecursive", "err", e, "event", ev.Op.String())
+						}
+					}
+				}
+
+				slog.Debug(fmt.Sprintf("handleEvent %s %s", ev.Op.String(), ev.Name))
+				w.handleEvent(ev)
 			}
-		}()
-
-		if err != nil {
-			slog.Error("watcher run", "err", err)
 		}
-	})
-
-	wg.Wait()
+	}()
 
 	return
 }
@@ -213,7 +206,7 @@ func Root(root ...string) Option {
 
 func Filter(filter ...string) Option {
 	return func(o *Watcher) {
-		o.filter = compileMatch(filter...)
+		o.filter = rex.CompileMatch(filter...)
 	}
 }
 
@@ -230,9 +223,9 @@ func Throttle(throttle time.Duration) Option {
 }
 
 type (
-	HandlerFunc  func(events []fsnotify.Event) error
-	HeaderOption func(*Route)
-	Route        struct {
+	HandlerFunc   func(ctx context.Context, events []fsnotify.Event) error
+	HandlerOption func(*Route)
+	Route         struct {
 		Name    string
 		Match   func(string) bool
 		Op      fsnotify.Op
@@ -245,7 +238,7 @@ type (
 	}
 )
 
-func (r *Route) Run() {
+func (r *Route) Run(ctx context.Context) {
 	r.mu.Lock()
 	events := r.events
 	r.events = r.events[:0]
@@ -266,20 +259,20 @@ func (r *Route) Run() {
 		return
 	}
 
-	if err := r.Handler(events); err != nil {
+	if err := r.Handler(ctx, events); err != nil {
 		slog.Error("route run", "err", err, "route", r.Name)
 	}
 }
 
-func Match(match ...string) HeaderOption {
+func Match(match ...string) HandlerOption {
 	return func(r *Route) {
-		r.Match = compileMatch(match...)
+		r.Match = rex.CompileMatch(match...)
 	}
 }
 
-func Op(op ...fsnotify.Op) HeaderOption {
+func Events(eventOp string) HandlerOption {
 	return func(r *Route) {
-		r.Op = lo.Reduce(op, func(agg fsnotify.Op, item fsnotify.Op, _ int) fsnotify.Op { return agg | item }, 0)
+		r.Op = convOp(eventOp)
 	}
 }
 
