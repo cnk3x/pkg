@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 type Options struct {
-	ID func(file string) string
+	ID     func(file string) string
+	Pretty bool
 }
 
 type Option func(opts *Options)
 
-func GenerateID(id func(file string) string) Option {
-	return func(opts *Options) {
-		opts.ID = id
-	}
-}
+func Pretty(pretty bool) Option                     { return func(opts *Options) { opts.Pretty = pretty } }
+func GenerateID(id func(file string) string) Option { return func(opts *Options) { opts.ID = id } }
 
 func NameFromBase(base string) Option {
 	return GenerateID(func(file string) string {
@@ -27,7 +26,9 @@ func NameFromBase(base string) Option {
 			return ""
 		}
 
-		name := strings.TrimSuffix(rel, filepath.Ext(rel))
-		return cleanRe.ReplaceAllString(name, "-")
+		return cleanRe.ReplaceAllString(strings.TrimSuffix(rel, filepath.Ext(rel)), "-")
 	})
 }
+
+var cleanRe = regexp.MustCompile(`[\\/:*?"<>|.-]+`)
+var spaceRe = regexp.MustCompile(`(\s*\n\s*)+`)

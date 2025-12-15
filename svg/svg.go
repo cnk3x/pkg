@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/samber/lo"
@@ -83,7 +82,7 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 		}
 
 		// 构建 symbol（移除 svg 标签，保留内部内容）
-		symbols = append(symbols, Symbol{ID: iconId, ViewBox: svg.ViewBox, Content: svg.Content})
+		symbols = append(symbols, Symbol{ID: iconId, ViewBox: svg.ViewBox, Content: spaceRe.ReplaceAll(svg.Content, []byte(" "))})
 	}
 
 	slog.Debug("symbols", "count", len(symbols))
@@ -101,16 +100,23 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 	if _, err := buf.WriteString(xml.Header); err != nil {
 		return fmt.Errorf("写入雪碧图文件头失败: %w", err)
 	}
+
+	// 序列化 XML
 	encoder := xml.NewEncoder(&buf)
-	encoder.Indent("", "  ")
+	if options.Pretty {
+		encoder.Indent("", "  ")
+	}
 	if err := encoder.Encode(sprite); err != nil {
 		return fmt.Errorf("序列化雪碧图失败: %w", err)
 	}
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("序列化雪碧图失败: %w", err)
+	}
 
+	// 写入文件
 	return os.WriteFile(dstPath, buf.Bytes(), 0644)
 }
 
 func defaultIdGen(file string) string {
-	return regexp.MustCompile(`[\\/:*?"<>|.-]+`).
-		ReplaceAllString(strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), "-")
+	return cleanRe.ReplaceAllString(strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), "-")
 }
