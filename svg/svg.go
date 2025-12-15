@@ -81,12 +81,8 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 			continue
 		}
 
-		if !options.Pretty {
-			svg.Content = spaceRe.ReplaceAll(svg.Content, []byte(" "))
-		}
-
 		// 构建 symbol（移除 svg 标签，保留内部内容）
-		symbols = append(symbols, Symbol{ID: iconId, ViewBox: svg.ViewBox, Content: svg.Content})
+		symbols = append(symbols, Symbol{ID: iconId, ViewBox: svg.ViewBox, Content: spaceRe.ReplaceAll(svg.Content, []byte(" "))})
 	}
 
 	slog.Debug("symbols", "count", len(symbols))

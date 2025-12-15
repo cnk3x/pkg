@@ -31,4 +31,4 @@ func NameFromBase(base string) Option {
 }
 
 var cleanRe = regexp.MustCompile(`[\\/:*?"<>|.-]+`)
-var spaceRe = regexp.MustCompile(`(\s*\n\s*)+`)
+var spaceRe = regexp.MustCompile(`\s+`)
