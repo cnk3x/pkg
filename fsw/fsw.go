@@ -54,13 +54,8 @@ func WithOptions(options Options) *Watcher {
 	)
 }
 
-func (w *Watcher) Handle(name string, handler HandlerFunc, options ...HandlerOption) {
-	r := &Route{
-		Name:    name,
-		Match:   nil,
-		Op:      0,
-		Handler: handler,
-	}
+func (w *Watcher) Handle(name string, options ...HandlerOption) {
+	r := &Route{Name: name}
 	for _, opt := range options {
 		opt(r)
 	}
@@ -223,7 +218,7 @@ func Throttle(throttle time.Duration) Option {
 }
 
 type (
-	HandlerFunc   func(ctx context.Context, events []fsnotify.Event) error
+	HandlerFunc   func(ctx context.Context, events []fsnotify.Event)
 	HandlerOption func(*Route)
 	Route         struct {
 		Name    string
@@ -259,14 +254,24 @@ func (r *Route) Run(ctx context.Context) {
 		return
 	}
 
-	if err := r.Handler(ctx, events); err != nil {
-		slog.Error("route run", "err", err, "route", r.Name)
+	r.Handler(ctx, events)
+}
+
+func Name(name string) HandlerOption {
+	return func(r *Route) {
+		r.Name = name
 	}
 }
 
 func Match(match ...string) HandlerOption {
 	return func(r *Route) {
 		r.Match = rex.CompileMatch(match...)
+	}
+}
+
+func Handle(handler HandlerFunc) HandlerOption {
+	return func(r *Route) {
+		r.Handler = handler
 	}
 }
 

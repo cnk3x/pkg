@@ -15,10 +15,9 @@ func TestWatcher(t *testing.T) {
 
 	w := New(Root("../"), Filter(`!/\.(.*)`, "!modules"))
 
-	w.Handle("log", func(ctx context.Context, ev []fsnotify.Event) error {
+	w.Handle("log", Match(`!(.*)_test\.go$`), Handle(func(ctx context.Context, ev []fsnotify.Event) {
 		t.Log("handle", lo.Uniq(lo.Map(ev, func(e fsnotify.Event, _ int) string { return e.Name })))
-		return nil
-	}, Match(`!(.*)_test\.go$`))
+	}))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
