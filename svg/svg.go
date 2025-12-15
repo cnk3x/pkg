@@ -1,6 +1,7 @@
 package svg
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
@@ -8,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 func Sprite(dstPath string, files []string, opts ...Option) error {
@@ -32,7 +35,6 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 		ID      string   `xml:"id,attr"`
 		ViewBox string   `xml:"viewBox,attr"`
 		Content []byte   `xml:",innerxml"`
-		// DataIcon string   `xml:"data-icon,attr"`
 	}
 
 	// Sprite 雪碧图整体结构
@@ -44,19 +46,21 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 		Symbols []Symbol `xml:"symbol"`
 	}
 
-	generateId := options.ID
-	if generateId == nil {
-		generateId = func(file string) string {
-			return regexp.MustCompile(`[\\/:*?"<>|.-]+`).
-				ReplaceAllString(strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), "-")
-		}
+	if options.ID == nil {
+		options.ID = defaultIdGen
 	}
 
 	var symbols []Symbol
 
 	for _, file := range files {
-		// 获取图标 ID（文件名，不含后缀）
-		iconId := generateId(file)
+		// 获取图标 ID
+		iconId := options.ID(file)
+
+		// 去重
+		if lo.SomeBy(symbols, func(s Symbol) bool { return s.ID == iconId }) {
+			slog.Warn(fmt.Sprintf("svg sprite id %s replicated, skip", iconId))
+			continue
+		}
 
 		// 读取 SVG 内容
 		svgData, err := os.ReadFile(file)
@@ -92,17 +96,21 @@ func Sprite(dstPath string, files []string, opts ...Option) error {
 		Symbols: symbols,
 	}
 
-	// 序列化并写入文件
-	return openWrite(dstPath, func(file *os.File) error {
-		// 补充 XML 声明
-		if _, err := file.WriteString(xml.Header); err != nil {
-			return fmt.Errorf("写入雪碧图文件头失败: %w", err)
-		}
-		encoder := xml.NewEncoder(file)
-		encoder.Indent("", "  ")
-		if err := encoder.Encode(sprite); err != nil {
-			return fmt.Errorf("序列化雪碧图失败: %w", err)
-		}
-		return nil
-	})
+	// 补充 XML 声明
+	var buf bytes.Buffer
+	if _, err := buf.WriteString(xml.Header); err != nil {
+		return fmt.Errorf("写入雪碧图文件头失败: %w", err)
+	}
+	encoder := xml.NewEncoder(&buf)
+	encoder.Indent("", "  ")
+	if err := encoder.Encode(sprite); err != nil {
+		return fmt.Errorf("序列化雪碧图失败: %w", err)
+	}
+
+	return os.WriteFile(dstPath, buf.Bytes(), 0644)
+}
+
+func defaultIdGen(file string) string {
+	return regexp.MustCompile(`[\\/:*?"<>|.-]+`).
+		ReplaceAllString(strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), "-")
 }
