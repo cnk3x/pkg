@@ -8,7 +8,7 @@ import (
 	"github.com/samber/lo"
 )
 
-func CompileMatch(patterns ...string) func(string) bool {
+func Compile(patterns ...string) func(string) bool {
 	if len(patterns) == 0 {
 		return nil
 	}

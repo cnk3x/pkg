@@ -21,3 +21,16 @@ func IsRegular(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.Mode().IsRegular()
 }
+
+func AbsAll(paths []string) []string {
+	r := make([]string, len(paths))
+	for i, p := range paths {
+		abs, err := filepath.Abs(p)
+		if err == nil {
+			r[i] = abs
+		} else {
+			r[i] = p
+		}
+	}
+	return r
+}

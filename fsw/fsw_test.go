@@ -2,7 +2,9 @@ package fsw
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,15 +15,20 @@ import (
 func TestWatcher(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	w := New(Root("../"), Filter(`!/\.(.*)`, "!modules"))
-
-	w.Handle("log", Match(`!(.*)_test\.go$`), Handle(func(ctx context.Context, ev []fsnotify.Event) {
-		t.Log("handle", lo.Uniq(lo.Map(ev, func(e fsnotify.Event, _ int) string { return e.Name })))
-	}))
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := w.Run(ctx); err != nil {
+
+	fw := New(Options{
+		Root:    []string{"../"},
+		Exclude: []string{`^[\._-]`, "modules"},
+	})
+
+	//  Match(`!(.*)_test\.go$`),
+	fw.Handle("log", Handle(func(ctx context.Context, ev []fsnotify.Event) {
+		t.Log("handle log", strings.Join(lo.Map(ev, func(e fsnotify.Event, _ int) string { return fmt.Sprintf("\n\t-- [%s] %s", e.Op.String(), e.Name) }), ""))
+	}))
+
+	if err := fw.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

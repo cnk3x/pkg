@@ -1,10 +1,9 @@
 package fsw
 
 import (
-	"cmp"
 	"context"
-	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,15 +11,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cnk3x/pkg/filex"
 	"github.com/cnk3x/pkg/rex"
 	"github.com/fsnotify/fsnotify"
 	"github.com/samber/lo"
 )
 
+const throttleMin = time.Second * 2
+
 type Watcher struct {
 	root     []string
-	filter   func(string) bool
+	exclude  func(string) bool
 	allowOp  fsnotify.Op
 	throttle time.Duration
 
@@ -31,28 +31,37 @@ type Watcher struct {
 	mu      sync.Mutex
 }
 
-func New(options ...Option) *Watcher {
-	w := &Watcher{}
-	for _, opt := range options {
-		opt(w)
-	}
-	return w
+type Route struct {
+	Name    string
+	Match   func(string) bool
+	Op      fsnotify.Op
+	Handler HandlerFunc
+
+	timer  *time.Timer
+	events []fsnotify.Event
+
+	mu sync.Mutex
 }
+
+type (
+	HandlerFunc   func(ctx context.Context, events []fsnotify.Event)
+	HandlerOption func(*Route)
+)
 
 type Options struct {
 	Root     []string
-	Filter   []string
+	Exclude  []string
 	Event    string
 	Throttle time.Duration
 }
 
-func WithOptions(options Options) *Watcher {
-	return New(
-		Root(options.Root...),
-		Filter(options.Filter...),
-		AllowOp(options.Event),
-		Throttle(options.Throttle),
-	)
+func New(options Options) *Watcher {
+	return &Watcher{
+		root:     options.Root,
+		exclude:  rex.Compile(options.Exclude...),
+		allowOp:  Op(options.Event),
+		throttle: options.Throttle,
+	}
 }
 
 func (w *Watcher) Handle(name string, options ...HandlerOption) {
@@ -60,251 +69,146 @@ func (w *Watcher) Handle(name string, options ...HandlerOption) {
 	for _, opt := range options {
 		opt(r)
 	}
-	r.timer = time.AfterFunc(max(w.throttle, time.Second*3), func() { r.Run(w.ctx) })
+	r.timer = time.AfterFunc(max(w.throttle, throttleMin), func() { r.Run(w.ctx) })
 	r.timer.Stop()
 	w.routes = append(w.routes, r)
 }
 
 func (w *Watcher) Run(ctx context.Context) (err error) {
 	slog.Info("watcher run")
-	defer slog.Info("watcher done", "err", err)
-
 	w.ctx = ctx
+
 	if w.fw, err = fsnotify.NewWatcher(); err != nil {
 		return
 	}
 
-	for _, root := range w.root {
-		if err = w.addRecursive(root); err != nil {
-			return
-		}
+	for _, f := range w.root {
+		w.Add(f)
 	}
 
-	w.watches = w.fw.WatchList()
-
-	for _, f := range w.watches {
-		slog.Debug("watches", "path", f)
-	}
-
-	err = func() (err error) {
-		for {
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("事件处理通道关闭: %w", context.Cause(ctx))
-			case e, ok := <-w.fw.Errors:
-				if !ok {
-					return
-				}
-				return e
-			case ev, ok := <-w.fw.Events:
-				if !ok {
-					return
-				}
-
-				if !w.filter(ev.Name) {
-					continue
-				}
-
-				switch {
-				case ev.Op.Has(fsnotify.Remove | fsnotify.Rename):
-					if e := w.Remove(ev.Name); e != nil {
-						slog.Debug("delRecursive", "err", e, "event", ev.Op.String())
-					}
-				case ev.Op.Has(fsnotify.Create):
-					if stat, e := os.Stat(ev.Name); e == nil && stat.IsDir() {
-						if e := w.Add(ev.Name); e != nil {
-							slog.Debug("addRecursive", "err", e, "event", ev.Op.String())
-						}
-					}
-				}
-
-				slog.Debug(fmt.Sprintf("handleEvent %s %s", ev.Op.String(), ev.Name))
-				w.handleEvent(ev)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("watcher context done: %w", context.Cause(ctx))
+		case err = <-w.fw.Errors:
+			return fmt.Errorf("watcher error: %w", err)
+		case ev := <-w.fw.Events:
+			if w.exclude != nil && w.exclude(filepath.Base(ev.Name)) {
+				continue
 			}
-		}
-	}()
 
-	return
-}
+			switch {
+			case ev.Op.Has(fsnotify.Remove | fsnotify.Rename):
+				w.Remove(ev.Name)
+			case ev.Op.Has(fsnotify.Create):
+				w.Add(ev.Name)
+			}
 
-func (w *Watcher) handleEvent(ev fsnotify.Event) {
-	if w.allowOp&ev.Op == 0 {
-		slog.Debug(fmt.Sprintf("skipEvent %s %s", ev.Op.String(), ev.Name), "allowOp", w.allowOp.String())
-		return
-	}
+			if w.allowOp != 0 && w.allowOp&ev.Op == 0 {
+				slog.Debug(fmt.Sprintf("event skip op %s %s", ev.Op.String(), ev.Name), "allowOp", w.allowOp.String())
+				continue
+			}
 
-	for _, r := range w.routes {
-		if r.Op != 0 && r.Op&ev.Op == 0 {
-			continue
-		}
-		if r.Match == nil || r.Match(ev.Name) {
-			slog.Debug("route match", "name", r.Name, "event", ev.Op.String(), "path", ev.Name)
-			r.mu.Lock()
-			r.events = append(r.events, ev)
-			r.timer.Reset(max(w.throttle, time.Second*3))
-			r.mu.Unlock()
+			for _, r := range w.routes {
+				if (r.Op == 0 || r.Op&ev.Op != 0) && (r.Match == nil || r.Match(ev.Name)) {
+					r.mu.Lock()
+					r.events = append(r.events, ev)
+					r.timer.Reset(max(w.throttle, throttleMin))
+					r.mu.Unlock()
+				}
+			}
 		}
 	}
 }
 
 // 递归删除
-func (w *Watcher) Remove(fullPath string) (err error) {
+func (w *Watcher) Remove(fullPath string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	for _, f := range w.watches {
-		if strings.HasPrefix(fullPath, f) {
-			err = errors.Join(err, w.fw.Remove(f))
+		if f == fullPath || strings.HasPrefix(f, fullPath+string(os.PathSeparator)) {
+			if err := w.fw.Remove(f); err != nil {
+				slog.Error("watch remove fail", "path", f, "err", err)
+			}
 		}
 	}
-
 	w.watches = w.fw.WatchList()
-	return
 }
 
 // 递归添加
-func (w *Watcher) Add(fullPath string) (err error) {
+func (w *Watcher) Add(dir string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if stat, e := os.Stat(fullPath); e != nil || stat.IsDir() {
-		return cmp.Or(e, fmt.Errorf("路径不是目录，只能添加目录为监控目标： %s", fullPath))
-	}
-
-	if err = w.addRecursive(fullPath); err != nil {
+	stat, err := os.Stat(dir)
+	if err != nil || !stat.IsDir() {
 		return
 	}
 
-	w.watches = w.fw.WatchList()
-	return
-}
+	if dir, err = filepath.Abs(dir); err != nil {
+		slog.Error("watch add fail", "path", dir, "err", err)
+		return
+	}
 
-func (w *Watcher) addRecursive(dir string) (err error) {
-	if e := filex.Walk(dir, w.filter, func(fullPath string) error {
-		if !filex.PathIsDir(fullPath) {
+	if err = filepath.WalkDir(dir, func(fullPath string, d fs.DirEntry, init error) error {
+		if init != nil || !d.IsDir() {
+			return init
+		}
+
+		if w.exclude != nil && w.exclude(d.Name()) {
+			return fs.SkipDir
+		}
+
+		if lo.SomeBy(w.watches, func(p string) bool { return p == fullPath }) {
 			return nil
 		}
-		if !lo.ContainsBy(w.watches, func(p string) bool { return strings.HasPrefix(fullPath, p) }) {
-			err = errors.Join(err, w.fw.Add(fullPath))
+
+		if e := w.fw.Add(fullPath); e != nil {
+			slog.Error("watch add fail", "path", fullPath, "err", e)
+			return nil
 		}
+
+		w.watches = append(w.watches, fullPath)
 		return nil
-	}); e != nil {
-		err = errors.Join(err, e)
-	}
-
-	w.watches = w.fw.WatchList()
-	return
-}
-
-type Option func(w *Watcher)
-
-func Root(root ...string) Option {
-	return func(o *Watcher) {
-		o.root = lo.FilterMap(root, func(root string, _ int) (string, bool) {
-			root, err := filepath.Abs(root)
-			return root, err == nil
-		})
+	}); err != nil {
+		slog.Error("watch add fail", "path", dir, "err", err)
 	}
 }
-
-func Filter(filter ...string) Option {
-	return func(o *Watcher) {
-		o.filter = rex.CompileMatch(filter...)
-	}
-}
-
-func AllowOp(allowOp string) Option {
-	return func(o *Watcher) {
-		o.allowOp = convOp(allowOp)
-	}
-}
-
-func Throttle(throttle time.Duration) Option {
-	return func(o *Watcher) {
-		o.throttle = max(throttle, time.Second*3)
-	}
-}
-
-type (
-	HandlerFunc   func(ctx context.Context, events []fsnotify.Event)
-	HandlerOption func(*Route)
-	Route         struct {
-		Name    string
-		Match   func(string) bool
-		Op      fsnotify.Op
-		Handler HandlerFunc
-
-		timer  *time.Timer
-		events []fsnotify.Event
-
-		mu sync.Mutex
-	}
-)
 
 func (r *Route) Run(ctx context.Context) {
+	if len(r.events) == 0 || r.Handler == nil {
+		return
+	}
+
 	r.mu.Lock()
 	events := r.events
 	r.events = r.events[:0]
 	r.mu.Unlock()
-
-	if len(events) == 0 {
-		return
-	}
-
-	events = lo.UniqBy(events, func(item fsnotify.Event) string { return item.String() })
-	slog.Debug(
-		"route run",
-		"name", r.Name,
-		"event", lo.Reduce(events, func(acc fsnotify.Op, item fsnotify.Event, _ int) fsnotify.Op { return acc | item.Op }, 0).String(),
-		"path", lo.Map(events, func(it fsnotify.Event, _ int) string { return it.Name }))
-
-	if r.Handler == nil {
-		return
-	}
-
 	r.Handler(ctx, events)
 }
 
-func Name(name string) HandlerOption {
-	return func(r *Route) {
-		r.Name = name
-	}
-}
+func Match(match ...string) HandlerOption      { return func(r *Route) { r.Match = rex.Compile(match...) } }
+func Handle(handler HandlerFunc) HandlerOption { return func(r *Route) { r.Handler = handler } }
+func Events(eventOp string) HandlerOption      { return func(r *Route) { r.Op = Op(eventOp) } }
 
-func Match(match ...string) HandlerOption {
-	return func(r *Route) {
-		r.Match = rex.CompileMatch(match...)
+func Op(s string) fsnotify.Op {
+	if s == "" {
+		return 0
 	}
-}
 
-func Handle(handler HandlerFunc) HandlerOption {
-	return func(r *Route) {
-		r.Handler = handler
-	}
-}
-
-func Events(eventOp string) HandlerOption {
-	return func(r *Route) {
-		r.Op = convOp(eventOp)
-	}
-}
-
-func convOp(sop string) fsnotify.Op {
-	if sop != "" {
-		return lo.Reduce([]rune(sop), func(agg fsnotify.Op, item rune, _ int) fsnotify.Op {
-			switch item {
-			case 'c':
-				return agg | fsnotify.Create
-			case 'w':
-				return agg | fsnotify.Write
-			case 'd':
-				return agg | fsnotify.Remove
-			case 'm':
-				return agg | fsnotify.Rename
-			default:
-				return agg
-			}
-		}, 0)
-	}
-	return fsnotify.Create | fsnotify.Write | fsnotify.Remove | fsnotify.Rename
+	return lo.Reduce([]rune(s), func(agg fsnotify.Op, item rune, _ int) fsnotify.Op {
+		switch item {
+		case 'c':
+			return agg | fsnotify.Create
+		case 'w':
+			return agg | fsnotify.Write
+		case 'd':
+			return agg | fsnotify.Remove
+		case 'm':
+			return agg | fsnotify.Rename
+		default:
+			return agg
+		}
+	}, 0)
 }

@@ -70,7 +70,7 @@ func Extract(dir string, extractOptions ...Option) ProcessFunc {
 			current, total, index := int64(0), item.Size(), item.Index()
 			p = func(n int64) { eop.progress(index, fpath, atomic.AddInt64(&current, n), total) }
 		}
-		return filex.Process(target, filex.WriteFrom(ctx, it, p), filex.CreateMode(item.Mode().Perm()))
+		return filex.OpenWrite(target, filex.WriteFrom(ctx, it, p), filex.CreateMode(item.Mode().Perm()))
 	}
 }
 

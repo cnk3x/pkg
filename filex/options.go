@@ -50,10 +50,10 @@ func CreateDirs(createDirs bool, mode os.FileMode) Option {
 func CreateMode(mode os.FileMode) Option { return func(opts *options) { opts.createMode = mode } }
 
 // Readonly 返回一个 Option，用于设置以只读方式打开文件
-func Readonly() Option { return func(opts *options) { opts.readonly = true } }
+func Readonly(opts *options) { opts.readonly = true }
 
 // Overwrite 返回一个 Option，用于设置覆盖已存在的文件
-func Overwrite() Option { return func(opts *options) { opts.append, opts.overwrite = false, true } }
+func Overwrite(opts *options) { opts.append, opts.overwrite = false, true }
 
 // Append 返回一个 Option，用于设置以追加模式写入文件
-func Append() Option { return func(opts *options) { opts.append, opts.overwrite = true, false } }
+func Append(opts *options) { opts.append, opts.overwrite = true, false }

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/cnk3x/pkg/x"
 )
@@ -65,12 +66,13 @@ func WriteText(filePath string, text string, opts ...Option) (err error) {
 	return
 }
 
-func Copy(src, dst string) (err error) {
-	return Process(src, func(r *os.File) error {
-		return Process(dst, func(w *os.File) error {
-			return CopyPipe(context.Background(), w, r, nil)
-		})
-	}, Readonly())
+func FileCopy(src, dst string, opts ...Option) (err error) {
+	return OpenRead(src, func(r *os.File) error {
+		return OpenWrite(dst, func(w *os.File) error {
+			_, err = io.Copy(w, r)
+			return err
+		}, opts...)
+	})
 }
 
 // Open 根据 opts 选项打开或创建文件，支持只读、覆盖、追加、排他创建等模式
@@ -101,9 +103,17 @@ func Open(filePath string, opts ...Option) (file *os.File, err error) {
 	return
 }
 
-// Process 打开文件后立即执行传入的 processFunc，并确保文件关闭
-func Process(filePath string, processFunc ProcessFunc, opts ...Option) (err error) {
-	file, err := Open(filePath, opts...)
+func OpenRead(filePath string, processFunc ProcessFunc, opts ...Option) (err error) {
+	file, err := Open(filePath, slices.Insert(opts, 0, func(opts *options) { opts.readonly = true })...)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	return processFunc(file)
+}
+
+func OpenWrite(filePath string, processFunc ProcessFunc, opts ...Option) (err error) {
+	file, err := Open(filePath, slices.Insert(opts, 0, func(opts *options) { opts.overwrite = true })...)
 	if err != nil {
 		return
 	}
