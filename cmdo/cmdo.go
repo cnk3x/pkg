@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"github.com/samber/lo"
 )
@@ -12,9 +13,18 @@ import (
 type Option func(*exec.Cmd)
 
 func Apply(c *exec.Cmd, opts ...Option) *exec.Cmd {
+	if c.SysProcAttr == nil {
+		c.SysProcAttr = &syscall.SysProcAttr{}
+	}
+
+	if c.Env == nil {
+		c.Env = os.Environ()
+	}
+
 	for _, opt := range opts {
 		opt(c)
 	}
+
 	return c
 }
 
