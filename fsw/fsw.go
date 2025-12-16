@@ -1,6 +1,7 @@
 package fsw
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io/fs"
@@ -16,7 +17,7 @@ import (
 	"github.com/samber/lo"
 )
 
-const throttleMin = time.Second * 2
+const throttleMin = time.Second
 
 type Watcher struct {
 	root     []string
@@ -32,19 +33,20 @@ type Watcher struct {
 }
 
 type Route struct {
-	Name    string
-	Match   func(string) bool
-	Op      fsnotify.Op
-	Handler HandlerFunc
+	name     string
+	match    func(string) bool
+	events   fsnotify.Op
+	handler  HandlerFunc
+	throttle time.Duration
 
-	timer  *time.Timer
-	events []fsnotify.Event
+	timer   *time.Timer
+	payload []fsnotify.Event
 
 	mu sync.Mutex
 }
 
 type (
-	HandlerFunc   func(ctx context.Context, events []fsnotify.Event)
+	HandlerFunc   func(ctx context.Context, payload []fsnotify.Event)
 	HandlerOption func(*Route)
 )
 
@@ -65,7 +67,7 @@ func New(options Options) *Watcher {
 }
 
 func (w *Watcher) Handle(name string, options ...HandlerOption) {
-	r := &Route{Name: name}
+	r := &Route{name: name}
 	for _, opt := range options {
 		opt(r)
 	}
@@ -92,28 +94,28 @@ func (w *Watcher) Run(ctx context.Context) (err error) {
 			return fmt.Errorf("watcher context done: %w", context.Cause(ctx))
 		case err = <-w.fw.Errors:
 			return fmt.Errorf("watcher error: %w", err)
-		case ev := <-w.fw.Events:
-			if w.exclude != nil && w.exclude(filepath.Base(ev.Name)) {
+		case payload := <-w.fw.Events:
+			if w.exclude != nil && w.exclude(filepath.Base(payload.Name)) {
 				continue
 			}
 
 			switch {
-			case ev.Op.Has(fsnotify.Remove | fsnotify.Rename):
-				w.Remove(ev.Name)
-			case ev.Op.Has(fsnotify.Create):
-				w.Add(ev.Name)
+			case payload.Op.Has(fsnotify.Remove | fsnotify.Rename):
+				w.Remove(payload.Name)
+			case payload.Op.Has(fsnotify.Create):
+				w.Add(payload.Name)
 			}
 
-			if w.allowOp != 0 && w.allowOp&ev.Op == 0 {
-				slog.Debug(fmt.Sprintf("event skip op %s %s", ev.Op.String(), ev.Name), "allowOp", w.allowOp.String())
+			if w.allowOp != 0 && w.allowOp&payload.Op == 0 {
+				slog.Debug(fmt.Sprintf("event skip op %s %s", payload.Op.String(), payload.Name), "allowOp", w.allowOp.String())
 				continue
 			}
 
 			for _, r := range w.routes {
-				if (r.Op == 0 || r.Op&ev.Op != 0) && (r.Match == nil || r.Match(ev.Name)) {
+				if (r.events == 0 || r.events&payload.Op != 0) && (r.match == nil || r.match(payload.Name)) {
 					r.mu.Lock()
-					r.events = append(r.events, ev)
-					r.timer.Reset(max(w.throttle, throttleMin))
+					r.payload = append(r.payload, payload)
+					r.timer.Reset(max(cmp.Or(r.throttle, w.throttle), throttleMin))
 					r.mu.Unlock()
 				}
 			}
@@ -177,20 +179,21 @@ func (w *Watcher) Add(dir string) {
 }
 
 func (r *Route) Run(ctx context.Context) {
-	if len(r.events) == 0 || r.Handler == nil {
+	if len(r.payload) == 0 || r.handler == nil {
 		return
 	}
 
 	r.mu.Lock()
-	events := r.events
-	r.events = r.events[:0]
+	events := r.payload
+	r.payload = r.payload[:0]
 	r.mu.Unlock()
-	r.Handler(ctx, events)
+	r.handler(ctx, events)
 }
 
-func Match(match ...string) HandlerOption      { return func(r *Route) { r.Match = rex.Compile(match...) } }
-func Handle(handler HandlerFunc) HandlerOption { return func(r *Route) { r.Handler = handler } }
-func Events(eventOp string) HandlerOption      { return func(r *Route) { r.Op = Op(eventOp) } }
+func Match(match ...string) HandlerOption           { return func(r *Route) { r.match = rex.Compile(match...) } }
+func Handle(handler HandlerFunc) HandlerOption      { return func(r *Route) { r.handler = handler } }
+func Events(eventOp string) HandlerOption           { return func(r *Route) { r.events = Op(eventOp) } }
+func Throttle(throttle time.Duration) HandlerOption { return func(r *Route) { r.throttle = throttle } }
 
 func Op(s string) fsnotify.Op {
 	if s == "" {
