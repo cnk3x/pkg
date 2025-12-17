@@ -1,21 +1,13 @@
 package arrx
 
 // 可变参数固定
-func Variadic[T any](arr ...T) []T {
-	return arr
-}
+func Variadic[T any](arr ...T) []T { return arr }
 
-// Ni -- No Index
-func Ni[T, R any](f func(T) R) func(T, int) R {
-	return func(t T, _ int) R { return f(t) }
-}
-
-func NiB[T, R any](f func(T) (R, bool)) func(T, int) (R, bool) {
-	return func(t T, _ int) (R, bool) { return f(t) }
-}
-
-func Ni3[T, U, R any](f func(T, U) R) func(T, U, int) R {
-	return func(t T, u U, _ int) R { return f(t, u) }
-}
-
+// Len 返回切片 s 的长度
+//
+// 参数:
+//   - s: 类型为 S 的切片，其中 S 是 []T 的类型别名，T 可以为任意类型
+//
+// 返回值:
+//   - int: 切片 s 的元素个数
 func Len[S ~[]T, T any](s S) int { return len(s) }
