@@ -6,11 +6,13 @@ import (
 	"strings"
 )
 
-func Printer(prefix string, level Level) interface {
+func Printer(prefix string, level Level) iPrinter {
+	return &printer{log: With(prefix), level: level}
+}
+
+type iPrinter = interface {
 	Print(...any)
 	Printf(string, ...any)
-} {
-	return &printer{log: With(prefix), level: level}
 }
 
 type printer struct {
