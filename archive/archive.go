@@ -12,34 +12,49 @@ import (
 	"path/filepath"
 )
 
-var Done = errors.New("done")
+// ErrDone 是一个用于标记处理完成的错误标识
+var ErrDone = errors.New("done")
 
+// Item 接口定义了归档文件中单个项目的规范，包含了获取上下文、索引、打开文件、路径以及文件信息的方法
 type Item interface {
+	// Context 返回与此项目关联的上下文
 	Context() context.Context
+	// Index 返回项目在归档文件中的索引位置
 	Index() int
+	// Open 打开项目并返回可读取的流
 	Open() (io.ReadCloser, error)
+	// Path 返回项目的路径
 	Path() string
 	os.FileInfo
 }
 
+// ProcessFunc 定义了处理归档文件中项目的函数类型
 type ProcessFunc func(ctx context.Context, item Item) (err error)
 
-func Read(ctx context.Context, source string, itemProcess ProcessFunc) (err error) {
+// Read 根据文件扩展名识别归档文件格式并读取其中的内容，支持 .zip 和 .tar.gz 格式
+// 参数:
+//   - ctx: 上下文，用于控制处理流程和超时取消
+//   - source: 归档文件的路径
+//   - process: 处理每个归档项的函数
+//
+// 返回值:
+//   - 处理过程中发生的错误，如果正常结束或遇到EOF、SkipAll、ErrDone则返回nil
+func Read(ctx context.Context, source string, process ProcessFunc) (err error) {
 	switch filepath.Ext(source) {
 	case ".zip":
-		err = readZip(ctx, source, itemProcess)
+		err = readZip(ctx, source, process)
 	case ".tar.gz":
-		err = readTgz(ctx, source, itemProcess)
+		err = readTgz(ctx, source, process)
 	}
 
-	if err == fs.SkipAll || err == io.EOF || err == Done {
+	if err == fs.SkipAll || err == io.EOF || err == ErrDone {
 		err = nil
 	}
 
 	return
 }
 
-func readZip(ctx context.Context, source string, itemProcess ProcessFunc) (err error) {
+func readZip(ctx context.Context, source string, process ProcessFunc) (err error) {
 	zr, ze := zip.OpenReader(source)
 	if err = ze; err != nil {
 		return
@@ -50,13 +65,13 @@ func readZip(ctx context.Context, source string, itemProcess ProcessFunc) (err e
 		case <-ctx.Done():
 			err = ctx.Err()
 		default:
-			err = itemProcess(ctx, &simpleItem{ctx, i, zr.File[i].Name, zr.File[i].FileInfo(), zr.File[i].Open})
+			err = process(ctx, &simpleItem{ctx, i, zr.File[i].Name, zr.File[i].FileInfo(), zr.File[i].Open})
 		}
 	}
 	return
 }
 
-func readTgz(ctx context.Context, source string, itemProcess ProcessFunc) (err error) {
+func readTgz(ctx context.Context, source string, process ProcessFunc) (err error) {
 	fr, fe := os.Open(source)
 	if err = fe; err != nil {
 		return
@@ -78,7 +93,7 @@ func readTgz(ctx context.Context, source string, itemProcess ProcessFunc) (err e
 			if err = e; err != nil {
 				return
 			}
-			err = itemProcess(ctx, &simpleItem{ctx, i, it.Name, it.FileInfo(), func() (io.ReadCloser, error) { return io.NopCloser(tr), nil }})
+			err = process(ctx, &simpleItem{ctx, i, it.Name, it.FileInfo(), func() (io.ReadCloser, error) { return io.NopCloser(tr), nil }})
 		}
 	}
 

@@ -48,6 +48,13 @@ type Program struct {
 	done   <-chan struct{}
 }
 
+// Start 启动一个程序并返回Program实例
+//
+// 参数:
+//   - ctx: 控制程序生命周期的context上下文
+//   - options: 配置程序的各种选项，如日志、准备回调等
+//
+// 返回值: 返回Program指针，可用于控制程序启停
 func Start(ctx context.Context, options ...Option) *Program {
 	s := &Program{log: logx.With("运行")}
 	done := make(chan struct{})

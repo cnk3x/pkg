@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Select the best named certificate per the usual behavior if c.GetCertificate is nil,
+// BestNamedCertificate Select the best named certificate per the usual behavior if c.GetCertificate is nil,
 // and c.NameToCertificate is not.
 func BestNamedCertificate(c *tls.Config, clientHello *tls.ClientHelloInfo) (*tls.Certificate, bool) {
 	name := strings.ToLower(clientHello.ServerName)
@@ -17,8 +17,7 @@ func BestNamedCertificate(c *tls.Config, clientHello *tls.ClientHelloInfo) (*tls
 		return cert, true
 	}
 
-	// try replacing labels in the name with wildcards until we get a
-	// match.
+	// try replacing labels in the name with wildcards until we get a match.
 	labels := strings.Split(name, ".")
 	for i := range labels {
 		labels[i] = "*"
